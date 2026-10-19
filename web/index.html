@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Private Roulette</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <!-- join / landing -->
+  <section id="view-landing">
+    <div class="hero">
+      <h1>Private&nbsp;Roulette</h1>
+      <p class="tagline">Provably fair. Beautifully dealt. Yours alone.</p>
+      <div class="join-card">
+        <label>Game ID</label>
+        <input id="join-game" placeholder="e.g. 09a79760" autocomplete="off" />
+        <label>Player key <span class="muted">(leave empty to spectate)</span></label>
+        <input id="join-key" placeholder="from your invite link" autocomplete="off" />
+        <div class="row">
+          <button id="join-btn" class="primary">Join table</button>
+          <button id="spectate-btn" class="ghost">Spectate</button>
+        </div>
+        <p class="muted small">
+          Got an invite link? Just open it — it fills this in automatically.
+          <a href="#" id="open-settings">Server settings</a>
+        </p>
+      </div>
+      <div class="fair-note">
+        Every spin is verifiable: <code>result = uint(sha256(dice + ":" + control)) % 37</code>.
+        The dealer rolls <code>/random</code> in-game; the proof line shows the math for each result.
+      </div>
+    </div>
+  </section>
+
+  <!-- locked / unauthorized -->
+  <section id="view-locked" hidden>
+    <div class="hero">
+      <h2>Not authorized</h2>
+      <p class="muted">This key doesn't match a seat at the table.</p>
+    </div>
+  </section>
+
+  <!-- table -->
+  <section id="view-table" hidden>
+    <header>
+      <span id="table-info" class="table-info"></span>
+      <span id="status" class="status"></span>
+      <span id="balance" class="balance"></span>
+      <span id="last-net" class="net"></span>
+    </header>
+
+    <main>
+      <div class="left">
+        <div class="wheel-wrap"><canvas id="wheel"></canvas></div>
+        <div id="history" class="history"></div>
+        <div id="control-note" class="fair-note small" hidden></div>
+        <div id="proof-line" class="proof"></div>
+      </div>
+
+      <div class="right">
+        <div id="players" class="players"></div>
+
+        <div id="bet-wrap" class="bet-wrap">
+          <div id="chips" class="chips"></div>
+          <div class="board-outer">
+            <div id="board"></div>
+            <div id="betting-blocker" hidden><span id="lock-label"></span></div>
+          </div>
+          <div class="actions">
+            <button id="ready-btn">Ready up</button>
+            <button id="rebet-btn">Rebet</button>
+            <button id="clear-btn">Clear</button>
+            <button id="cashout-btn" class="cashout">Cash out</button>
+          </div>
+        </div>
+
+        <div class="chat">
+          <div id="chat-log"></div>
+          <form id="chat-form">
+            <input id="chat-input" placeholder="say something…" maxlength="300" autocomplete="off" />
+          </form>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <dialog id="settings-dlg">
+    <form method="dialog">
+      <h3>Server settings</h3>
+      <label>API URL</label>
+      <input id="api-url-input" placeholder="wss://…" />
+      <menu>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button id="settings-save" value="save" class="primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+</body>
+</html>

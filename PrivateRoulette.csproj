@@ -1,0 +1,22 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <PropertyGroup>
+    <!-- Dalamud.NET.Sdk defaults: net10.0-windows, x64, LangVersion 14, Nullable on -->
+    <Version>0.1.0</Version>
+    <RootNamespace>PrivateRoulette</RootNamespace>
+    <AssemblyName>PrivateRoulette</AssemblyName>
+
+    <!-- Manifest metadata (DalamudPackager generates PrivateRoulette.json) -->
+    <Name>Private Roulette</Name>
+    <Author>Akari</Author>
+    <Punchline>Private dealer roulette - provably fair, beautifully dealt, yours alone</Punchline>
+    <Description>Personal dealer-hosted gil roulette: provably-fair control spins, live web players, chat announcements and a dealer console worth watching. Whitelisted to authorized dealers only. Protocol-compatible with SimpleRoulette tables.</Description>
+    <RepoUrl>https://github.com/dexcss/PrivateRoulette</RepoUrl>
+    <Tags>roulette;gamba;dealer;private</Tags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

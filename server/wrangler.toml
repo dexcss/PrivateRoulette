@@ -1,0 +1,18 @@
+name = "private-roulette-api"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+
+# Durable Objects provide the authoritative game state, WebSockets and ledger
+# persistence. Free plan includes DOs with SQLite storage.
+[durable_objects]
+bindings = [
+  { name = "TABLE", class_name = "TableRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TableRoom"]
+
+# Dealer token: generate once with `openssl rand -hex 24` (or any long random
+# string), then: npx wrangler secret put DEALER_TOKEN
+# The same token goes into the PrivateRoulette plugin settings.
