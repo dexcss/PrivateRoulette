@@ -97,7 +97,7 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 12200): void {
+  spinTo(result: number, durationMs = 24400): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // relative angle of the pocket centre (ball angle minus wheel angle)
@@ -116,7 +116,7 @@ export class Wheel {
     this.spin = {
       startTime: performance.now(),
       duration: durationMs,
-      preRoll: 1200,
+      preRoll: 2400,
       wheelFrom,
       wheelTo,
       ballFrom: relFrom,
