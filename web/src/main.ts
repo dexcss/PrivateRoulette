@@ -49,7 +49,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySe
 const viewLanding = $("#view-landing");
 const viewTable = $("#view-table");
 const viewLocked = $("#view-locked");
-const chipSelect = $("#chip-select");
+const chipSelect = document.getElementById("chips")!;
 const boardEl = $("#board");
 const wheelCanvas = $("#wheel") as HTMLCanvasElement;
 const historyStrip = $("#history");
