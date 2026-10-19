@@ -1,4 +1,4 @@
-// Premium American double-zero roulette wheel â€” procedural canvas rendering.
+// Premium American double-zero roulette wheel Ã¢â‚¬â€ procedural canvas rendering.
 // 38 pockets (0, 00, 1..36); "00" is encoded as 37 and displayed as "00".
 // Everything here is drawn by us: layered gradients, gold inlay, ball shadow
 // and trail, rim sheen, and a physically-flavoured spin.
@@ -32,6 +32,7 @@ interface SpinState {
   ballFrom: number;
   ballTo: number;
   result: number;
+  progress: number[];
 }
 
 export class Wheel {
@@ -96,32 +97,63 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 9200): void {
+  spinTo(result: number, durationMs = 11500): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // relative angle of the pocket centre (ball angle minus wheel angle)
     const relEnd = pocketIndex * SLOT - Math.PI / 2;
 
     const wheelFrom = this.wheelAngle;
-    const wheelTo = wheelFrom + (2.2 + Math.random() * 0.6) * TAU;
+    const wheelTo = wheelFrom + (1.6 + Math.random() * 0.5) * TAU;
 
     // animate the ball RELATIVE to the wheel so it always settles exactly in
-    // the winning pocket; the ball races against the wheel, decelerates,
-    // taps the rim, drops inward and teeters into place.
-    const relTurns = 10 + Math.random() * 2.5;
+    // the winning pocket; the ball races against the wheel, then bleeds speed
+    // linearly over a long tail for a suspenseful approach.
+    const relTurns = 9 + Math.random() * 2;
     const relFrom = relEnd + relTurns * TAU;
 
     this.trail = [];
     this.spin = {
       startTime: performance.now(),
       duration: durationMs,
-      preRoll: 900,
+      preRoll: 1200,
       wheelFrom,
       wheelTo,
       ballFrom: relFrom,
       ballTo: relEnd,
       result,
+      progress: this.buildProgressTable(),
     };
+  }
+
+  /** Velocity profile: quick ramp-up, cruise, then a linear decay to zero.
+   *  Integrated once per spin; guarantees a long, readable landing. */
+  private buildProgressTable(): number[] {
+    const N = 240;
+    const v = (t: number): number => {
+      if (t < 0.05) return t / 0.05;        // launch
+      if (t <= 0.45) return 1;             // cruise
+      return Math.max(0, (1 - t) / 0.55);  // linear brake to zero
+    };
+    const table = new Array<number>(N + 1).fill(0);
+    let acc = 0;
+    const dt = 1 / N;
+    for (let i = 1; i <= N; i++) {
+      const t = (i - 0.5) * dt;
+      acc += v(t) * dt;
+      table[i] = acc;
+    }
+    for (let i = 0; i <= N; i++) table[i] /= acc;
+    return table;
+  }
+
+  private sampleProgress(table: number[], t: number): number {
+    const x = Math.min(1, Math.max(0, t)) * (table.length - 1);
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = table[i];
+    const b = table[Math.min(i + 1, table.length - 1)];
+    return a + (b - a) * f;
   }
 
   private easeOutCubic(x: number): number {
@@ -159,7 +191,7 @@ export class Wheel {
     }
 
     // ball is animated relative to the wheel: guaranteed to settle on ballTo
-    const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.ballProgress(tBall) + this.rattle(tBall);
+    const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.sampleProgress(s.progress, tBall) + this.settleWobble(tBall);
     this.ballAngle = this.wheelAngle + rel;
     this.ballRadiusFactor = this.ballRadiusAt(tBall);
 
@@ -173,54 +205,27 @@ export class Wheel {
     }
   }
 
-  /** Rotation progress of the ball relative to the rotor.
-   *  launch â†’ fast orbit â†’ dramatic slow-down â†’ creep into the pocket. */
-  private ballProgress(t: number): number {
-    const launchEnd = 0.08;
-    const orbitEnd = 0.56;
-    const decelEnd = 0.86;
-    if (t < launchEnd) {
-      const u = t / launchEnd;
-      return 0.04 * u * u; // wind-up
-    }
-    if (t < orbitEnd) {
-      const u = (t - launchEnd) / (orbitEnd - launchEnd);
-      return 0.04 + 0.56 * u; // fast, readable orbit
-    }
-    if (t < decelEnd) {
-      const u = (t - orbitEnd) / (decelEnd - orbitEnd);
-      return 0.60 + 0.27 * (1 - Math.pow(1 - u, 3)); // heavy brake
-    }
-    const u = (t - decelEnd) / (1 - decelEnd);
-    return 0.87 + 0.13 * (1 - Math.pow(1 - u, 2.4)); // slow creep into place
+  /** One gentle overshoot as the ball slows into the pocket.
+   *  Starts and ends at zero so the landing is exact. */
+  private settleWobble(t: number): number {
+    if (t < 0.9) return 0;
+    const p = (t - 0.9) / 0.1;
+    return Math.sin(p * Math.PI * 1.5) * SLOT * 0.16 * Math.pow(1 - p, 3);
   }
 
-  /** Fret teeter: the ball skips across separators and settles exactly at t=1. */
-  private rattle(t: number): number {
-    if (t < 0.84) return 0;
-    const p = (t - 0.84) / 0.16;
-    const decay = Math.pow(1 - p, 2.6);
-    return Math.sin(p * Math.PI * 7.5) * SLOT * 0.55 * decay;
-  }
-
-  /** Ball height: rides the rim, taps the wall, drops with hops into the well. */
+  /** Ball height: rides the rim, drops smoothly into the well with one soft hop.
+   *  Continuous at every boundary â€” no popping. */
   private ballRadiusAt(t: number): number {
-    const tap = 0.72;
-    const dropStart = 0.76;
-    const dropEnd = 0.86;
+    const dropStart = 0.62;
+    const dropEnd = 0.78;
 
-    if (t < tap) return 0.925;
-    if (t < dropStart) {
-      // tiny outward tap against the rim just before the drop
-      const u = (t - tap) / (dropStart - tap);
-      return 0.925 + Math.sin(u * Math.PI) * 0.012;
-    }
+    if (t < dropStart) return 0.925;
     if (t < dropEnd) {
       const u = (t - dropStart) / (dropEnd - dropStart);
-      return 0.937 + (this.REST_RADIUS - 0.937) * (u * u); // accelerate inward
+      return 0.925 + (this.REST_RADIUS - 0.925) * this.smoothstep(u);
     }
-    const p = (t - dropEnd) / (1 - dropEnd);
-    return this.REST_RADIUS + Math.abs(Math.sin(p * Math.PI * 2.5)) * 0.05 * Math.pow(1 - p, 1.5);
+    const p = (t - dropEnd) / 0.22;
+    return this.REST_RADIUS + Math.sin(Math.min(1, p) * Math.PI) * 0.02 * Math.pow(1 - p, 2);
   }
 
   private faceCache: HTMLCanvasElement | null = null;

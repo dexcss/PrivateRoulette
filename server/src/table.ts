@@ -472,10 +472,10 @@ export class TableRoom extends DurableObject<Env> {
       dealer_world: String(d.dealer_world ?? ""),
       spin_mode: mode,
       control_number: cryptoRandomHex(8),
-      max_bet_inner: clampNum(d.max_bet_inner, 1, 100_000_000, 500),
-      max_bet_outer: clampNum(d.max_bet_outer, 1, 100_000_000, 250),
-      max_bet_inner_vip: clampNum(d.max_bet_inner_vip, 1, 100_000_000, 1000),
-      max_bet_outer_vip: clampNum(d.max_bet_outer_vip, 1, 100_000_000, 500),
+      max_bet_inner: clampNum(d.max_bet_inner, 1, 100_000_000, 500000),
+      max_bet_outer: clampNum(d.max_bet_outer, 1, 100_000_000, 250000),
+      max_bet_inner_vip: clampNum(d.max_bet_inner_vip, 1, 100_000_000, 1000000),
+      max_bet_outer_vip: clampNum(d.max_bet_outer_vip, 1, 100_000_000, 500000),
       chip_denominations: Array.isArray(d.chip_denominations) && d.chip_denominations.length > 0
         ? d.chip_denominations.map((x: any) => clampNum(x, 1, 10_000_000, 25))
         : [10000, 50000, 100000, 250000, 500000],

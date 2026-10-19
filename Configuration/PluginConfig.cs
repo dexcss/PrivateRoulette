@@ -73,10 +73,10 @@ public sealed class PluginConfig : IPluginConfiguration
 
     // ---- game defaults ----
     [JsonProperty("SpinMode")] public SpinMode DefaultSpinMode { get; set; } = SpinMode.Control;
-    [JsonProperty("MaxBetInner")] public int MaxBetInner { get; set; } = 500;
-    [JsonProperty("MaxBetOuter")] public int MaxBetOuter { get; set; } = 250;
-    [JsonProperty("MaxBetInnerVip")] public int MaxBetInnerVip { get; set; } = 1000;
-    [JsonProperty("MaxBetOuterVip")] public int MaxBetOuterVip { get; set; } = 500;
+    [JsonProperty("MaxBetInner")] public int MaxBetInner { get; set; } = 500000;
+    [JsonProperty("MaxBetOuter")] public int MaxBetOuter { get; set; } = 250000;
+    [JsonProperty("MaxBetInnerVip")] public int MaxBetInnerVip { get; set; } = 1000000;
+    [JsonProperty("MaxBetOuterVip")] public int MaxBetOuterVip { get; set; } = 500000;
     [JsonProperty("ChipPresets")]
     public List<ChipPreset> ChipPresets { get; set; } = new()
     {
@@ -125,7 +125,7 @@ public sealed class PluginConfig : IPluginConfiguration
             this.ApiUrl = "wss://private-roulette-api.dexcss-roulette.workers.dev/ws";
 
         // Migration v1 → v2: chip denominations moved to 10k..500k.
-        if (this.Version < 2)
+        if (this.Version < 3)
         {
             this.ChipPresets = new()
             {
@@ -133,7 +133,11 @@ public sealed class PluginConfig : IPluginConfiguration
                 new() { Name = "High Roller", Values = new() { 50000, 100000, 250000, 500000, 1000000 } },
                 new() { Name = "Budget", Values = new() { 1000, 5000, 10000, 25000, 50000 } },
             };
-            this.Version = 2;
+            this.MaxBetInner = 500000;
+            this.MaxBetOuter = 250000;
+            this.MaxBetInnerVip = 1000000;
+            this.MaxBetOuterVip = 500000;
+            this.Version = 3;
             this.Save();
         }
     }
