@@ -317,8 +317,27 @@ export class TableRoom extends DurableObject<Env> {
       return;
     }
 
+    // connection-scoped events work before any game exists
+    if (t === "ping") {
+      this.send(ws, "pong", {});
+      return;
+    }
+    if (t === "list_games") {
+      if (conn.role !== "dealer") return this.err(ws, "dealer only");
+      this.send(ws, "games_list", { games: await this.listGameSummaries() });
+      return;
+    }
+    if (t === "create_game") {
+      await this.createGame(conn, ws, d);
+      return;
+    }
+    if (t === "join_game") {
+      await this.joinGame(conn, ws, d);
+      return;
+    }
+
     if (!this.state) {
-      this.err(ws, "no game");
+      this.err(ws, "no active game — create or join one first");
       return;
     }
     const g = this.state;
@@ -326,10 +345,6 @@ export class TableRoom extends DurableObject<Env> {
     try {
       switch (t) {
         // ================= dealer =================
-        case "ping": this.send(ws, "pong", {}); break;
-        case "list_games": this.send(ws, "games_list", { games: await this.listGameSummaries() }); break;
-        case "create_game": await this.createGame(conn, ws, d); break;
-        case "join_game": await this.joinGame(conn, ws, d); break;
         case "add_player": await this.addPlayer(ws, d); break;
         case "adjust_balance": await this.adjustBalance(ws, d); break;
         case "record_payout": await this.recordPayout(ws, d); break;
@@ -622,6 +637,7 @@ export class TableRoom extends DurableObject<Env> {
       for (const [target, amount] of Object.entries(p.bets)) {
         const mult = payoutMultiplierForTarget(target, result);
         const payout = amount * mult;
+        p.balance -= amount; // stake leaves the balance when the round settles
         net += payout - amount;
         if (mult > 0) {
           p.balance += payout;

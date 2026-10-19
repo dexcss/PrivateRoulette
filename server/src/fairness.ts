@@ -123,6 +123,10 @@ export function isInsideBet(target: string): boolean {
 
 export function isValidBetTarget(target: string): boolean {
   const t = (target || "").trim().toLowerCase();
+  if (t.startsWith("n-")) {
+    const n = parseInt(t.slice(2), 10);
+    return Number.isFinite(n) && n >= 0 && n <= 36;
+  }
   if (["red", "black", "odd", "even", "low", "high", "firstfour"].includes(t)) return true;
   const list = (prefix: string, count: number): boolean => {
     if (!t.startsWith(prefix)) return false;
