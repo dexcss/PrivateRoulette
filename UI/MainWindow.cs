@@ -474,6 +474,16 @@ public sealed class SettingsWindow : Window
             newDealer = string.Empty;
         }
 
+        MainWindow.SectionText("Backend");
+        var apiUrl = this.config.ApiUrl;
+        ImGui.SetNextItemWidth(-1);
+        if (ImGui.InputText("##apiurl", ref apiUrl, 256))
+        {
+            this.config.ApiUrl = apiUrl;
+            this.config.Save();
+        }
+        ImGui.TextDisabled("Your Cloudflare Worker WebSocket endpoint.");
+
         var verbose = this.config.VerboseWireLog;
         if (ImGui.Checkbox("Verbose wire log (debug)", ref verbose))
         {

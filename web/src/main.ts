@@ -4,7 +4,7 @@ import { Board } from "./board";
 
 // ---------- settings ----------
 
-const DEFAULT_API_URL = "wss://private-roulette-api.<YOUR-SUBDOMAIN>.workers.dev/ws";
+const DEFAULT_API_URL = "wss://private-roulette-api.dexcss-roulette.workers.dev/ws";
 const SETTINGS_KEY = "pr_settings_v1";
 
 interface Settings {

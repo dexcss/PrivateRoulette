@@ -39,7 +39,7 @@ public sealed class PluginConfig : IPluginConfiguration
     // ---- identity / server ----
     /// <summary>Backend WebSocket URL (your Cloudflare Worker).</summary>
     [JsonProperty("ApiUrl")]
-    public string ApiUrl { get; set; } = "wss://private-roulette-api.YOUR-SUBDOMAIN.workers.dev/ws";
+    public string ApiUrl { get; set; } = "wss://private-roulette-api.dexcss-roulette.workers.dev/ws";
 
     /// <summary>Dealer token — must match the backend's DEALER_TOKEN secret. This is the only credential.</summary>
     [JsonProperty("DealerToken")]
