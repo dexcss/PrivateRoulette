@@ -335,6 +335,9 @@ public sealed class MainWindow : Window
                         ImGui.SetClipboardText(link);
                 }
                 ImGui.SameLine();
+                if (ImGui.SmallButton("Tell"))
+                    this.session.SendLink(p);
+                ImGui.SameLine();
                 if (ImGui.SmallButton("Cash out"))
                     this.session.CashoutPlayer(p.Id);
                 ImGui.PopID();

@@ -52,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
 
         this.session.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.socket.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
+        this.session.RunCommand = cmd => this.commandManager.ProcessCommand(cmd);
         this.socket.SetHelloProvider(() => this.session.CurrentHello() ?? new { role = "dealer", token = "", dealer_name = "", dealer_world = "" });
 
         this.commandManager.AddHandler(MainCommand, new CommandInfo(this.OnCommand)

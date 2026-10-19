@@ -24,6 +24,9 @@ public sealed class RouletteSession : IDisposable
 
     public Action<Action>? RunOnMainThread { get; set; }
 
+    /// <summary>Executes a game chat command — set by the plugin.</summary>
+    public Action<string>? RunCommand { get; set; }
+
     // ---- connection state ----
     public bool Authenticated { get; private set; }
     public string AuthMessage { get; private set; } = string.Empty;
@@ -269,6 +272,14 @@ public sealed class RouletteSession : IDisposable
         _ = this.socket.SendChatAsync(this.GameId, text);
         // local echo so the dealer sees what was announced without opening the web client
         this.chat?.Print(new XivChatEntry { Message = $"[table] {text}", Type = XivChatType.Echo });
+    }
+
+    /// <summary>Whispers the player their invite link via /tell.</summary>
+    public void SendLink(PlayerState player)
+    {
+        var link = this.PlayerLink(player);
+        if (link == null) return;
+        this.RunCommand?.Invoke($"/tell {player.Name} {link}");
     }
 
     /// <summary>Player betting link for the given player.</summary>
