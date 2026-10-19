@@ -1,4 +1,4 @@
-// Premium American double-zero roulette wheel — procedural canvas rendering.
+// Premium American double-zero roulette wheel â€” procedural canvas rendering.
 // 38 pockets (0, 00, 1..36); "00" is encoded as 37 and displayed as "00".
 // Everything here is drawn by us: layered gradients, gold inlay, ball shadow
 // and trail, rim sheen, and a physically-flavoured spin.
@@ -63,7 +63,7 @@ export class Wheel {
       const dt = Math.min((t - this.lastFrame) / 1000, 0.05);
       this.lastFrame = t;
       this.update(dt);
-      this.draw(t / 1000);
+      this.draw();
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -174,7 +174,7 @@ export class Wheel {
   }
 
   /** Rotation progress of the ball relative to the rotor.
-   *  launch → fast orbit → dramatic slow-down → creep into the pocket. */
+   *  launch â†’ fast orbit â†’ dramatic slow-down â†’ creep into the pocket. */
   private ballProgress(t: number): number {
     const launchEnd = 0.08;
     const orbitEnd = 0.56;
@@ -223,7 +223,10 @@ export class Wheel {
     return this.REST_RADIUS + Math.abs(Math.sin(p * Math.PI * 2.5)) * 0.05 * Math.pow(1 - p, 1.5);
   }
 
-  private draw(now: number): void {
+  private faceCache: HTMLCanvasElement | null = null;
+  private faceKey = "";
+
+  private draw(): void {
     const ctx = this.ctx;
     const size = parseFloat(this.canvas.style.width);
     const c = size / 2;
@@ -231,139 +234,29 @@ export class Wheel {
 
     ctx.clearRect(0, 0, size, size);
 
-    // ambient halo
-    const halo = ctx.createRadialGradient(c, c, R * 0.6, c, c, R * 1.05);
-    halo.addColorStop(0, "rgba(201,162,39,0.0)");
-    halo.addColorStop(0.8, "rgba(201,162,39,0.10)");
-    halo.addColorStop(1, "rgba(201,162,39,0)");
-    ctx.fillStyle = halo;
+    // rebuild the static face only when the size changes
+    const dpr = window.devicePixelRatio || 1;
+    const key = `${size}x${dpr}`;
+    if (!this.faceCache || this.faceKey !== key) {
+      this.faceCache = this.buildFace(size, dpr);
+      this.faceKey = key;
+    }
+
+    // soft shadow under the wheel (cheap, no canvas filters)
     ctx.beginPath();
-    ctx.arc(c, c, R * 1.03, 0, TAU);
+    ctx.ellipse(c, c + R * 0.06, R * 0.99, R * 0.97, 0, 0, TAU);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fill();
 
-    // drop shadow
+    // one rotated bitmap instead of ~40 gradients + 76 text draws per frame
     ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(c, c + R * 0.06, R * 0.99, R * 0.96, 0, 0, TAU);
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.filter = "blur(14px)";
-    ctx.fill();
+    ctx.translate(c, c);
+    ctx.rotate(this.wheelAngle);
+    ctx.drawImage(this.faceCache, -size / 2, -size / 2, size, size);
     ctx.restore();
 
-    // ---- outer rim: layered wood + gold inlay ----
-    this.ring(c, R, R * 0.985, { inner: "#4a2f1b", outer: "#24160c" }, 0.0, TAU);
-    this.ring(c, R * 0.972, R * 0.94, { inner: "#7a4f2d", outer: "#50331c" }, 0.0, TAU);
-
-    // polished gold inlay with a slow rotating sheen
-    const sheenAngle = now * 0.35;
-    const goldGrad = ctx.createConicGradient ? ctx.createConicGradient(sheenAngle, c, c) : null;
-    ctx.beginPath();
-    ctx.arc(c, c, R * 0.935, 0, TAU);
-    ctx.arc(c, c, R * 0.905, 0, TAU, true);
-    if (goldGrad) {
-      goldGrad.addColorStop(0, "#8b6a1f");
-      goldGrad.addColorStop(0.12, "#e8cf86");
-      goldGrad.addColorStop(0.25, "#a9832b");
-      goldGrad.addColorStop(0.5, "#f2e3ac");
-      goldGrad.addColorStop(0.62, "#9a7724");
-      goldGrad.addColorStop(0.82, "#e5c979");
-      goldGrad.addColorStop(1, "#8b6a1f");
-      ctx.fillStyle = goldGrad;
-    } else {
-      ctx.fillStyle = "#c9a227";
-    }
-    ctx.fill("evenodd");
-
-    // inner rim shadow
-    this.ring(c, R * 0.905, R * 0.885, { inner: "rgba(0,0,0,0.65)", outer: "rgba(0,0,0,0.25)" }, 0, TAU);
-
-    // ---- pocket ring ----
     const pocketOuter = R * 0.875;
     const pocketInner = R * 0.46;
-    for (let i = 0; i < 38; i++) {
-      const n = ORDER[i];
-      const a0 = this.wheelAngle + i * SLOT - SLOT / 2 - Math.PI / 2;
-      const a1 = a0 + SLOT;
-      const col = pocketColor(n);
-
-      // wedge with radial well gradient
-      const g = ctx.createRadialGradient(c, c, pocketInner, c, c, pocketOuter);
-      g.addColorStop(0, col.top);
-      g.addColorStop(1, col.bottom);
-      ctx.beginPath();
-      ctx.arc(c, c, pocketOuter, a0, a1);
-      ctx.arc(c, c, pocketInner, a1, a0, true);
-      ctx.closePath();
-      ctx.fillStyle = g;
-      ctx.fill();
-
-      // inner edge shading (depth)
-      ctx.beginPath();
-      ctx.arc(c, c, pocketOuter, a0, a1);
-      ctx.arc(c, c, pocketOuter - R * 0.018, a1, a0, true);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
-      ctx.fill();
-
-      // gold separators
-      ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a0) * pocketInner, c + Math.sin(a0) * pocketInner);
-      ctx.lineTo(c + Math.cos(a0) * pocketOuter, c + Math.sin(a0) * pocketOuter);
-      ctx.strokeStyle = "rgba(232,207,134,0.55)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // number plate
-      const am = a0 + SLOT / 2;
-      const tr = pocketOuter - R * 0.052;
-      ctx.save();
-      ctx.translate(c + Math.cos(am) * tr, c + Math.sin(am) * tr);
-      ctx.rotate(am + Math.PI / 2);
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.font = `800 ${Math.max(10, R * 0.052)}px "Segoe UI", system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(labelOf(n), 0.6, 0.8);
-      ctx.fillStyle = "#f6efdd";
-      ctx.fillText(labelOf(n), 0, 0);
-      ctx.restore();
-    }
-
-    // ---- inner cone / hub ----
-    const cone = ctx.createRadialGradient(c - R * 0.18, c - R * 0.22, R * 0.02, c, c, pocketInner);
-    cone.addColorStop(0, "#2f333c");
-    cone.addColorStop(0.55, "#171a20");
-    cone.addColorStop(1, "#0a0c10");
-    ctx.beginPath();
-    ctx.arc(c, c, pocketInner, 0, TAU);
-    ctx.fillStyle = cone;
-    ctx.fill();
-
-    // spokes
-    for (let i = 0; i < 8; i++) {
-      const a = this.wheelAngle + (i * TAU) / 8;
-      const grad = ctx.createLinearGradient(
-        c + Math.cos(a) * R * 0.12, c + Math.sin(a) * R * 0.12,
-        c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44,
-      );
-      grad.addColorStop(0, "rgba(232,207,134,0.55)");
-      grad.addColorStop(1, "rgba(232,207,134,0.08)");
-      ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a) * R * 0.075, c + Math.sin(a) * R * 0.075);
-      ctx.lineTo(c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44);
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = Math.max(2, R * 0.008);
-      ctx.stroke();
-    }
-
-    // hub rings + monogram
-    this.ring(c, R * 0.17, R * 0.145, { inner: "#f0d98a", outer: "#a9832b" }, 0, TAU);
-    this.ring(c, R * 0.135, R * 0.11, { inner: "#3b2f12", outer: "#17130a" }, 0, TAU);
-    ctx.fillStyle = "#e8cf86";
-    ctx.font = `700 ${Math.max(9, R * 0.04)}px "Segoe UI", system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("PR", c, c + 1);
 
     // ---- ball ----
     let ballR: number;
@@ -462,17 +355,152 @@ export class Wheel {
     }
   }
 
-  private ring(c: number, rOuter: number, rInner: number, colors: { inner: string; outer: string }, a0: number, a1: number): void {
-    const ctx = this.ctx;
-    const g = ctx.createRadialGradient(c, c, rInner, c, c, rOuter);
-    g.addColorStop(0, colors.inner);
-    g.addColorStop(1, colors.outer);
-    ctx.beginPath();
-    ctx.arc(c, c, rOuter, a0, a1);
-    ctx.arc(c, c, rInner, a1, a0, true);
-    ctx.closePath();
-    ctx.fillStyle = g;
-    ctx.fill();
+  /** Renders the static wheel face (rim, pockets, numbers, hub) once per size. */
+  private buildFace(size: number, dpr: number): HTMLCanvasElement {
+    const cv = document.createElement("canvas");
+    cv.width = Math.max(1, Math.round(size * dpr));
+    cv.height = Math.max(1, Math.round(size * dpr));
+    const g = cv.getContext("2d")!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const c = size / 2;
+    const R = c - 6;
+
+    // ambient halo
+    const halo = g.createRadialGradient(c, c, R * 0.6, c, c, R * 1.05);
+    halo.addColorStop(0, "rgba(201,162,39,0)");
+    halo.addColorStop(0.8, "rgba(201,162,39,0.10)");
+    halo.addColorStop(1, "rgba(201,162,39,0)");
+    g.fillStyle = halo;
+    g.beginPath();
+    g.arc(c, c, R * 1.03, 0, TAU);
+    g.fill();
+
+    // ---- outer rim: layered wood + gold inlay ----
+    this.ringOn(g, c, R, R * 0.985, { inner: "#4a2f1b", outer: "#24160c" });
+    this.ringOn(g, c, R * 0.972, R * 0.94, { inner: "#7a4f2d", outer: "#50331c" });
+
+    // polished gold inlay (fixed sheen)
+    const goldGrad = g.createConicGradient ? g.createConicGradient(0, c, c) : null;
+    g.beginPath();
+    g.arc(c, c, R * 0.935, 0, TAU);
+    g.arc(c, c, R * 0.905, 0, TAU, true);
+    if (goldGrad) {
+      goldGrad.addColorStop(0, "#8b6a1f");
+      goldGrad.addColorStop(0.12, "#e8cf86");
+      goldGrad.addColorStop(0.25, "#a9832b");
+      goldGrad.addColorStop(0.5, "#f2e3ac");
+      goldGrad.addColorStop(0.62, "#9a7724");
+      goldGrad.addColorStop(0.82, "#e5c979");
+      goldGrad.addColorStop(1, "#8b6a1f");
+      g.fillStyle = goldGrad;
+    } else {
+      g.fillStyle = "#c9a227";
+    }
+    g.fill("evenodd");
+
+    // inner rim shadow
+    this.ringOn(g, c, R * 0.905, R * 0.885, { inner: "rgba(0,0,0,0.65)", outer: "rgba(0,0,0,0.25)" });
+
+    // ---- pocket ring ----
+    const pocketOuter = R * 0.875;
+    const pocketInner = R * 0.46;
+    for (let i = 0; i < 38; i++) {
+      const n = ORDER[i];
+      const a0 = i * SLOT - SLOT / 2 - Math.PI / 2;
+      const a1 = a0 + SLOT;
+      const col = pocketColor(n);
+
+      const grad = g.createRadialGradient(c, c, pocketInner, c, c, pocketOuter);
+      grad.addColorStop(0, col.top);
+      grad.addColorStop(1, col.bottom);
+      g.beginPath();
+      g.arc(c, c, pocketOuter, a0, a1);
+      g.arc(c, c, pocketInner, a1, a0, true);
+      g.closePath();
+      g.fillStyle = grad;
+      g.fill();
+
+      // inner edge shading (depth)
+      g.beginPath();
+      g.arc(c, c, pocketOuter, a0, a1);
+      g.arc(c, c, pocketOuter - R * 0.018, a1, a0, true);
+      g.closePath();
+      g.fillStyle = "rgba(0,0,0,0.28)";
+      g.fill();
+
+      // gold separators
+      g.beginPath();
+      g.moveTo(c + Math.cos(a0) * pocketInner, c + Math.sin(a0) * pocketInner);
+      g.lineTo(c + Math.cos(a0) * pocketOuter, c + Math.sin(a0) * pocketOuter);
+      g.strokeStyle = "rgba(232,207,134,0.55)";
+      g.lineWidth = 1.2;
+      g.stroke();
+
+      // number plate
+      const am = a0 + SLOT / 2;
+      const tr = pocketOuter - R * 0.052;
+      g.save();
+      g.translate(c + Math.cos(am) * tr, c + Math.sin(am) * tr);
+      g.rotate(am + Math.PI / 2);
+      g.fillStyle = "rgba(0,0,0,0.45)";
+      g.font = `800 ${Math.max(10, R * 0.052)}px "Segoe UI", system-ui, sans-serif`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(labelOf(n), 0.6, 0.8);
+      g.fillStyle = "#f6efdd";
+      g.fillText(labelOf(n), 0, 0);
+      g.restore();
+    }
+
+    // ---- inner cone ----
+    const cone = g.createRadialGradient(c - R * 0.18, c - R * 0.22, R * 0.02, c, c, pocketInner);
+    cone.addColorStop(0, "#2f333c");
+    cone.addColorStop(0.55, "#171a20");
+    cone.addColorStop(1, "#0a0c10");
+    g.beginPath();
+    g.arc(c, c, pocketInner, 0, TAU);
+    g.fillStyle = cone;
+    g.fill();
+
+    // spokes (fixed in wheel space)
+    for (let i = 0; i < 8; i++) {
+      const a = (i * TAU) / 8;
+      const grad = g.createLinearGradient(
+        c + Math.cos(a) * R * 0.12, c + Math.sin(a) * R * 0.12,
+        c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44,
+      );
+      grad.addColorStop(0, "rgba(232,207,134,0.55)");
+      grad.addColorStop(1, "rgba(232,207,134,0.08)");
+      g.beginPath();
+      g.moveTo(c + Math.cos(a) * R * 0.075, c + Math.sin(a) * R * 0.075);
+      g.lineTo(c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44);
+      g.strokeStyle = grad;
+      g.lineWidth = Math.max(2, R * 0.008);
+      g.stroke();
+    }
+
+    // hub rings + monogram
+    this.ringOn(g, c, R * 0.17, R * 0.145, { inner: "#f0d98a", outer: "#a9832b" });
+    this.ringOn(g, c, R * 0.135, R * 0.11, { inner: "#3b2f12", outer: "#17130a" });
+    g.fillStyle = "#e8cf86";
+    g.font = `700 ${Math.max(9, R * 0.04)}px "Segoe UI", system-ui, sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText("PR", c, c + 1);
+
+    return cv;
+  }
+
+  private ringOn(g: CanvasRenderingContext2D, c: number, rOuter: number, rInner: number, colors: { inner: string; outer: string }): void {
+    const grad = g.createRadialGradient(c, c, rInner, c, c, rOuter);
+    grad.addColorStop(0, colors.inner);
+    grad.addColorStop(1, colors.outer);
+    g.beginPath();
+    g.arc(c, c, rOuter, 0, TAU);
+    g.arc(c, c, rInner, 0, TAU, true);
+    g.closePath();
+    g.fillStyle = grad;
+    g.fill();
   }
 
   private roundRect(x: number, y: number, w: number, h: number, r: number): void {
