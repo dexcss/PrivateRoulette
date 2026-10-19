@@ -45,6 +45,9 @@ export class Wheel {
   private onTick?: () => void;
   private lastTickPocket = -1;
   private ballAngle = 0;
+  private ballRadiusFactor = 0.69;
+  private readonly REST_RADIUS = 0.69;
+  private lastTickTime = 0;
   private lastResult = -1;
   private settleTime = 0;
   private trail: { x: number; y: number }[] = [];
@@ -92,17 +95,20 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 6800): void {
+  spinTo(result: number, durationMs = 8600): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
-    const pocketAngle = pocketIndex * SLOT;
+    // relative angle of the pocket centre (ball angle minus wheel angle)
+    const relEnd = pocketIndex * SLOT - Math.PI / 2;
 
     const wheelFrom = this.wheelAngle;
-    const wheelTo = wheelFrom + (3 + Math.random() * 1.4) * TAU;
+    const wheelTo = wheelFrom + (4.5 + Math.random() * 1.5) * TAU;
 
-    const ballFrom = this.wheelAngle + Math.PI;
-    const ballTurns = 6 + Math.random() * 2;
-    const ballTo = wheelTo + pocketAngle - Math.PI / 2 + ballTurns * TAU;
+    // animate the ball RELATIVE to the wheel so it always settles exactly in
+    // the winning pocket; the ball races against the wheel, decelerates,
+    // drops inward and rattles into place.
+    const relTurns = 11 + Math.random() * 3;
+    const relFrom = relEnd + relTurns * TAU;
 
     this.trail = [];
     this.spin = {
@@ -110,8 +116,8 @@ export class Wheel {
       duration: durationMs,
       wheelFrom,
       wheelTo,
-      ballFrom,
-      ballTo,
+      ballFrom: relFrom,
+      ballTo: relEnd,
       result,
     };
   }
@@ -129,32 +135,57 @@ export class Wheel {
     const t = (performance.now() - s.startTime) / s.duration;
     if (t >= 1) {
       this.wheelAngle = s.wheelTo;
-      this.ballAngle = s.ballFrom + (s.ballTo - s.ballFrom);
+      this.ballAngle = s.wheelTo + s.ballTo;
+      this.ballRadiusFactor = this.REST_RADIUS;
       this.lastResult = s.result;
       this.settleTime = performance.now();
       this.spin = null;
       this.onSettle?.(s.result);
       return;
     }
-    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.easeOutCubic(Math.min(t, 1));
 
-    let b: number;
-    if (t < 0.85) {
-      const bt = t / 0.85;
-      b = s.ballFrom + (s.ballTo - s.ballFrom) * (1 - Math.pow(1 - bt, 2.2));
-    } else {
-      const base = s.ballFrom + (s.ballTo - s.ballFrom);
-      const phase = (t - 0.85) / 0.15;
-      const wobble = Math.sin(phase * Math.PI * 3) * SLOT * 0.85 * (1 - phase);
-      b = base + wobble;
-    }
-    this.ballAngle = b;
+    // wheel keeps turning through the whole spin
+    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.easeOutCubic(t);
 
-    const pocket = Math.floor((((b - this.wheelAngle) % TAU) + TAU) % TAU / SLOT);
-    if (pocket !== this.lastTickPocket) {
+    // ball is animated relative to the wheel: guaranteed to settle on relEnd
+    const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.easeOutQuint(t) + this.rattle(t);
+    this.ballAngle = this.wheelAngle + rel;
+    this.ballRadiusFactor = this.ballRadiusAt(t);
+
+    // pocket-crossing ticks (throttled so fast spins don't buzz)
+    const nowMs = performance.now();
+    const pocket = Math.floor((((this.ballAngle - this.wheelAngle) % TAU) + TAU) % TAU / SLOT);
+    if (pocket !== this.lastTickPocket && nowMs - this.lastTickTime > 26) {
       this.lastTickPocket = pocket;
+      this.lastTickTime = nowMs;
       this.onTick?.();
     }
+  }
+
+  private easeOutQuint(x: number): number {
+    return 1 - Math.pow(1 - x, 5);
+  }
+
+  /** damped rattle as the ball skips across pocket separators */
+  private rattle(t: number): number {
+    if (t < 0.82) return 0;
+    const p = (t - 0.82) / 0.18;
+    return Math.sin(p * Math.PI * 6.5) * SLOT * 0.5 * Math.pow(1 - p, 2.2);
+  }
+
+  /** ball drops from the rim into the pocket band with bouncing arcs */
+  private ballRadiusAt(t: number): number {
+    const dropStart = 0.62;
+    const dropEnd = 0.82;
+    if (t < dropStart) return 0.925;
+    if (t < dropEnd) {
+      const u = (t - dropStart) / (dropEnd - dropStart);
+      // accelerating fall, then caught by the pocket band
+      return 0.925 + (this.REST_RADIUS - 0.925) * (u * u * (3 - 2 * u));
+    }
+    const p = (t - dropEnd) / (1 - dropEnd);
+    // three shrinking radial hops as it settles
+    return this.REST_RADIUS + Math.abs(Math.sin(p * Math.PI * 3)) * 0.045 * Math.pow(1 - p, 1.6);
   }
 
   private draw(now: number): void {
@@ -303,11 +334,10 @@ export class Wheel {
     let ballR: number;
     let ballA: number;
     if (this.spin) {
-      const t = Math.min((performance.now() - this.spin.startTime) / this.spin.duration, 1);
-      ballR = R * (0.92 - 0.255 * this.easeOutCubic(t));
+      ballR = R * this.ballRadiusFactor;
       ballA = this.ballAngle;
     } else {
-      ballR = R * 0.665;
+      ballR = R * this.REST_RADIUS;
       ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT - Math.PI / 2 : Math.PI);
     }
 

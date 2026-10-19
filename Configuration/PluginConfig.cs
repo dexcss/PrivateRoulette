@@ -80,9 +80,9 @@ public sealed class PluginConfig : IPluginConfiguration
     [JsonProperty("ChipPresets")]
     public List<ChipPreset> ChipPresets { get; set; } = new()
     {
-        new() { Name = "Standard", Values = new() { 25, 100, 500, 1000 } },
-        new() { Name = "High Roller", Values = new() { 100, 500, 1000, 5000 } },
-        new() { Name = "Budget", Values = new() { 10, 25, 50, 100 } },
+        new() { Name = "Standard", Values = new() { 10000, 50000, 100000, 250000, 500000 } },
+        new() { Name = "High Roller", Values = new() { 50000, 100000, 250000, 500000, 1000000 } },
+        new() { Name = "Budget", Values = new() { 1000, 5000, 10000, 25000, 50000 } },
     };
 
     // ---- announcements (placeholders: $Gil $SpinType $Control $Bets $Name $PlayerBets $Number $Color $Results $Delta $Link $Balance $Message $Balances $Count) ----
@@ -123,6 +123,19 @@ public sealed class PluginConfig : IPluginConfiguration
         // Migration: configs saved by v0.2.0 carry a placeholder backend URL — heal it.
         if (string.IsNullOrEmpty(this.ApiUrl) || this.ApiUrl.Contains("YOUR-SUBDOMAIN", StringComparison.OrdinalIgnoreCase))
             this.ApiUrl = "wss://private-roulette-api.dexcss-roulette.workers.dev/ws";
+
+        // Migration v1 → v2: chip denominations moved to 10k..500k.
+        if (this.Version < 2)
+        {
+            this.ChipPresets = new()
+            {
+                new() { Name = "Standard", Values = new() { 10000, 50000, 100000, 250000, 500000 } },
+                new() { Name = "High Roller", Values = new() { 50000, 100000, 250000, 500000, 1000000 } },
+                new() { Name = "Budget", Values = new() { 1000, 5000, 10000, 25000, 50000 } },
+            };
+            this.Version = 2;
+            this.Save();
+        }
     }
 
     public void Save() => this.pluginInterface?.SavePluginConfig(this);

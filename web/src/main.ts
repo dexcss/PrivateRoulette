@@ -38,7 +38,7 @@ let state: GameStateMsg | null = null;
 let lastHistory: HistoryEntry[] = [];
 let wheel: Wheel | null = null;
 let board: Board | null = null;
-let selectedChip = 100;
+let selectedChip = 10000;
 let rejoinBets: Record<string, number> | null = null;
 let prevBalance = 0;
 

@@ -478,7 +478,7 @@ export class TableRoom extends DurableObject<Env> {
       max_bet_outer_vip: clampNum(d.max_bet_outer_vip, 1, 100_000_000, 500),
       chip_denominations: Array.isArray(d.chip_denominations) && d.chip_denominations.length > 0
         ? d.chip_denominations.map((x: any) => clampNum(x, 1, 10_000_000, 25))
-        : [25, 100, 500, 1000],
+        : [10000, 50000, 100000, 250000, 500000],
       game_status: "active",
       table_locked: false,
       spinning: false,
