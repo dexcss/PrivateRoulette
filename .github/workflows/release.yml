@@ -30,16 +30,16 @@ jobs:
           Expand-Archive -Force latest.zip $hooks
 
       - name: Restore
-        run: dotnet restore PrivateRoulette/PrivateRoulette.csproj
+        run: dotnet restore PrivateRoulette.csproj
 
       - name: Build
-        run: dotnet build PrivateRoulette/PrivateRoulette.csproj --configuration Release --no-restore
+        run: dotnet build PrivateRoulette.csproj --configuration Release --no-restore
 
       - name: Locate package
         id: pkg
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Path PrivateRoulette/bin -Recurse -Filter latest.zip | Select-Object -First 1
+          $zip = Get-ChildItem -Path bin -Recurse -Filter latest.zip | Select-Object -First 1
           if (-not $zip) { throw "latest.zip not found - DalamudPackager did not run" }
           Copy-Item $zip.FullName 'PrivateRoulette.zip' -Force
           $out = (Resolve-Path 'PrivateRoulette.zip').Path
