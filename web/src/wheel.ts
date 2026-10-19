@@ -97,7 +97,7 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 11500): void {
+  spinTo(result: number, durationMs = 12200): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // relative angle of the pocket centre (ball angle minus wheel angle)
@@ -131,9 +131,10 @@ export class Wheel {
   private buildProgressTable(): number[] {
     const N = 240;
     const v = (t: number): number => {
-      if (t < 0.05) return t / 0.05;        // launch
-      if (t <= 0.45) return 1;             // cruise
-      return Math.max(0, (1 - t) / 0.55);  // linear brake to zero
+      if (t < 0.05) return t / 0.05;              // launch
+      if (t <= 0.5) return 1;                     // cruise
+      const u = (1 - t) / 0.5;                    // brake progress
+      return Math.pow(Math.max(0, u), 1.5);       // convex brake: long crawl
     };
     const table = new Array<number>(N + 1).fill(0);
     let acc = 0;
