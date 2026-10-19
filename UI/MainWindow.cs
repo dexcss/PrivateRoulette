@@ -72,17 +72,21 @@ public sealed class MainWindow : Window
             return;
         }
 
-        // two-column: table state | controls
+        // two-column: table state | controls — both scroll independently
         if (ImGui.BeginTable("mainCols", 2, ImGuiTableFlags.Resizable))
         {
             ImGui.TableSetupColumn("##left", ImGuiTableColumnFlags.WidthStretch, 0.62f);
             ImGui.TableSetupColumn("##right", ImGuiTableColumnFlags.WidthStretch, 0.38f);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
+            ImGui.BeginChild("leftcol", new Vector2(0, 0), false);
             this.DrawPlayers();
+            ImGui.EndChild();
             ImGui.TableNextColumn();
+            ImGui.BeginChild("rightcol", new Vector2(0, 0), false);
             this.DrawSpinControls();
             this.DrawGameControls();
+            ImGui.EndChild();
             ImGui.EndTable();
         }
     }

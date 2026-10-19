@@ -46,7 +46,7 @@ public sealed class Plugin : IDalamudPlugin
         this.config.Initialize(this.pluginInterface);
 
         this.socket = new SocketService(this.config, log);
-        this.session = new RouletteSession(this.config, this.socket, log);
+        this.session = new RouletteSession(this.config, this.socket, log, chatGui);
         this.dice = new DiceService(this.config, this.session, chatGui, clientState, playerState, log);
         this.ui = new PluginUi(this.pluginInterface, this.config, this.socket, this.session, log);
 

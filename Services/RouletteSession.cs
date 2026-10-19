@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
 
 using PrivateRoulette.Configuration;
@@ -19,6 +20,7 @@ public sealed class RouletteSession : IDisposable
     private readonly PluginConfig config;
     private readonly SocketService socket;
     private readonly IPluginLog log;
+    private readonly IChatGui? chat;
 
     public Action<Action>? RunOnMainThread { get; set; }
 
@@ -70,11 +72,12 @@ public sealed class RouletteSession : IDisposable
 
     public event Action? Changed;
 
-    public RouletteSession(PluginConfig config, SocketService socket, IPluginLog log)
+    public RouletteSession(PluginConfig config, SocketService socket, IPluginLog log, IChatGui? chat = null)
     {
         this.config = config;
         this.socket = socket;
         this.log = log;
+        this.chat = chat;
 
         socket.Connected += this.OnConnected;
         socket.AuthOk += this.OnAuthOk;
@@ -240,6 +243,8 @@ public sealed class RouletteSession : IDisposable
     {
         if (this.GameId == null) return;
         _ = this.socket.SendChatAsync(this.GameId, text);
+        // local echo so the dealer sees what was announced without opening the web client
+        this.chat?.Print(new XivChatEntry { Message = $"[table] {text}", Type = XivChatType.Echo });
     }
 
     /// <summary>Player betting link for the given player.</summary>
