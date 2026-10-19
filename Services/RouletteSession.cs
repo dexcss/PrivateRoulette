@@ -63,6 +63,7 @@ public sealed class RouletteSession : IDisposable
     public List<TableHistoryEntry> History { get; } = new();
     public List<ChatMessage> Chat { get; } = new();
     public List<GameSummary> KnownGames { get; private set; } = new();
+    public HistoricalLedger? LastLedger { get; private set; }
 
     /// <summary>Waiting for the dealer to roll the dice (control mode).</summary>
     public bool AwaitingDice { get; private set; }
@@ -88,6 +89,7 @@ public sealed class RouletteSession : IDisposable
         socket.TableHistory += r => { this.History.Clear(); this.History.AddRange(r.History); this.Changed?.Invoke(); };
         socket.ChatHistory += r => { this.Chat.Clear(); this.Chat.AddRange(r.Messages); this.Changed?.Invoke(); };
         socket.ChatMessage += m => { this.Chat.Add(m); this.Changed?.Invoke(); };
+        socket.Ledger += l => { this.LastLedger = l; this.Changed?.Invoke(); };
         socket.DealerError += (msg, raw) => { this.AuthMessage = msg; this.log.Warning($"server error: {msg} {raw}"); this.Changed?.Invoke(); };
         socket.DealerOk += (msg, _) => { this.AuthMessage = msg; this.Changed?.Invoke(); };
     }
@@ -222,6 +224,17 @@ public sealed class RouletteSession : IDisposable
         if (this.GameId == null) return;
         _ = this.socket.GetLedgerAsync(this.GameId);
             }
+
+    public void LeaveTable()
+    {
+        this.GameId = null;
+        this.State = null;
+        this.PendingSpin = null;
+        this.LastSpin = null;
+        this.AwaitingDice = false;
+        _ = this.socket.ListGamesAsync();
+        this.Changed?.Invoke();
+    }
 
     public void SendChat(string text)
     {

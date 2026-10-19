@@ -150,6 +150,9 @@ public sealed class MainWindow : Window
                 ImGui.SameLine();
                 ImGui.TextColored(ImGuiColors.ParsedBlue, $"control #{this.session.State.ControlNumber}");
             }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("← Tables"))
+                this.session.LeaveTable();
         }
     }
 
@@ -314,6 +317,79 @@ public sealed class MainWindow : Window
         {
             ImGui.TextDisabled("no spins yet");
         }
+
+        SectionText("Table chat");
+        this.DrawTableChat();
+
+        SectionText("Ledger");
+        this.DrawLedger();
+    }
+
+    private void DrawTableChat()
+    {
+        ImGui.BeginChild("tablechat", new Vector2(0, 110), true);;
+        foreach (var m in this.session.Chat.TakeLast(30))
+        {
+            ImGui.TextColored(ColorFromHex(m.Color), m.FromName + ":");
+            ImGui.SameLine();
+            ImGui.TextWrapped(m.Text);
+        }
+        if (this.session.Chat.Count == 0)
+            ImGui.TextDisabled("(table chat shows here — players see it on the web client)");
+        ImGui.EndChild();
+    }
+
+    private void DrawLedger()
+    {
+        var ledger = this.session.LastLedger;
+        if (ledger == null)
+        {
+            ImGui.TextDisabled("press Refresh ledger to load the server ledger");
+            return;
+        }
+
+        if (ledger.Summary is { } summary)
+        {
+            ImGui.TextUnformatted($"rounds: {summary.GetValueOrDefault("total_rounds")} · bets: {FormatGil(summary.GetValueOrDefault("total_buy_ins"))} · tips: {FormatGil(summary.GetValueOrDefault("total_tips"))}");
+        }
+
+        if (ledger.Rounds is { Count: > 0 })
+        {
+            if (ImGui.BeginTable("ledgerRounds", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH))
+            {
+                ImGui.TableSetupColumn("Round", ImGuiTableColumnFlags.WidthFixed, 46);
+                ImGui.TableSetupColumn("Num", ImGuiTableColumnFlags.WidthFixed, 40);
+                ImGui.TableSetupColumn("Color", ImGuiTableColumnFlags.WidthFixed, 58);
+                ImGui.TableSetupColumn("Bets", ImGuiTableColumnFlags.WidthFixed, 78);
+                ImGui.TableSetupColumn("Payouts", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableHeadersRow();
+                foreach (var r in ledger.Rounds.TakeLast(8))
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted($"{r.GetValueOrDefault("round_number")}");
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted($"{r.GetValueOrDefault("winning_number")}");
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted($"{r.GetValueOrDefault("winning_color")}");
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted(FormatGil(r.GetValueOrDefault("total_bets")));
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted(FormatGil(r.GetValueOrDefault("total_payouts")));
+                }
+                ImGui.EndTable();
+            }
+        }
+        else
+        {
+            ImGui.TextDisabled("no rounds played yet");
+        }
+    }
+
+    private static string FormatGil(object? v)
+    {
+        try { return Convert.ToInt64(v).ToString("N0"); }
+        catch { return "0"; }
     }
 
     private void DrawSpinControls()
