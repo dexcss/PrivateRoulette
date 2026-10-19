@@ -66,11 +66,13 @@ public sealed class RouletteSession : IDisposable
     public List<ChatMessage> Chat { get; } = new();
     public List<GameSummary> KnownGames { get; private set; } = new();
     public HistoricalLedger? LastLedger { get; private set; }
+    public DealerStats? Stats { get; private set; }
 
     /// <summary>Waiting for the dealer to roll the dice (control mode).</summary>
     public bool AwaitingDice { get; private set; }
 
     public event Action? Changed;
+    public event Action<SpinResult>? SpinReceived;
 
     public RouletteSession(PluginConfig config, SocketService socket, IPluginLog log, IChatGui? chat = null)
     {
@@ -87,12 +89,13 @@ public sealed class RouletteSession : IDisposable
         socket.GameState += this.OnGameState;
         socket.PlayerCreated += this.OnPlayerCreated;
         socket.SpinReady += r => { this.PendingSpin = r; this.AwaitingDice = r.SpinMode == "control"; this.Changed?.Invoke(); };
-        socket.Spin += r => { this.LastSpin = r; this.PendingSpin = null; this.AwaitingDice = false; this.Changed?.Invoke(); };
+        socket.Spin += r => { this.LastSpin = r; this.PendingSpin = null; this.AwaitingDice = false; this.SpinReceived?.Invoke(r); this.Changed?.Invoke(); };
         socket.RoundResult += r => { this.AwaitingDice = false; this.Changed?.Invoke(); };
         socket.TableHistory += r => { this.History.Clear(); this.History.AddRange(r.History); this.Changed?.Invoke(); };
         socket.ChatHistory += r => { this.Chat.Clear(); this.Chat.AddRange(r.Messages); this.Changed?.Invoke(); };
         socket.ChatMessage += m => { this.Chat.Add(m); this.Changed?.Invoke(); };
         socket.Ledger += l => { this.LastLedger = l; this.Changed?.Invoke(); };
+        socket.DealerStats += s => { this.Stats = s; this.Changed?.Invoke(); };
         socket.DealerError += (msg, raw) => { this.AuthMessage = msg; this.log.Warning($"server error: {msg} {raw}"); this.Changed?.Invoke(); };
         socket.DealerOk += (msg, _) => { this.AuthMessage = msg; this.Changed?.Invoke(); };
     }
@@ -184,10 +187,10 @@ public sealed class RouletteSession : IDisposable
         _ = this.socket.JoinGameAsync(gameId);
     }
 
-    public void AddPlayer(string name, string displayName, long bankroll)
+    public void AddPlayer(string name, string displayName, long bankroll, bool isVip = false, bool isFreeplay = false)
     {
         if (this.GameId == null) return;
-        _ = this.socket.AddPlayerAsync(name, displayName, bankroll, this.GameId);
+        _ = this.socket.AddPlayerAsync(name, displayName, bankroll, this.GameId, isVip, isFreeplay);
     }
 
     public void AdjustBalance(string playerId, long delta)
@@ -195,6 +198,29 @@ public sealed class RouletteSession : IDisposable
         if (this.GameId == null) return;
         _ = this.socket.AdjustBalanceAsync(playerId, delta, this.GameId);
     }
+
+    public void CashoutPlayer(string playerId)
+    {
+        if (this.GameId == null) return;
+        _ = this.socket.CashoutPlayerAsync(playerId, this.GameId);
+    }
+
+    public void GetStats() => _ = this.socket.GetStatsAsync();
+
+    public void EndGame()
+    {
+        if (this.GameId == null) return;
+        _ = this.socket.EndGameAsync(this.GameId);
+    }
+
+    public void DeleteGame()
+    {
+        if (this.GameId == null) return;
+        _ = this.socket.DeleteGameAsync(this.GameId);
+        this.LeaveTable();
+    }
+
+    public void Echo(string text) => this.chat?.Print(new XivChatEntry { Message = text, Type = XivChatType.Echo });
 
     public void RequestSpin()
     {

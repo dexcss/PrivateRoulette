@@ -110,6 +110,7 @@ public sealed class PluginConfig : IPluginConfiguration
     [JsonProperty("AutoAnnounceBets")] public bool AutoAnnounceBets { get; set; } = true;
     [JsonProperty("AutoAnnounceResults")] public bool AutoAnnounceResults { get; set; } = true;
     [JsonProperty("SoundEffects")] public bool SoundEffects { get; set; } = true;
+    [JsonProperty("AutoOpenWheelOnSpin")] public bool AutoOpenWheelOnSpin { get; set; } = true;
     [JsonProperty("VerboseWireLog")] public bool VerboseWireLog { get; set; } = true;
     [JsonProperty("TradeThrottleMs")] public int TradeThrottleMs { get; set; } = 800;
 

@@ -228,6 +228,18 @@ public sealed class GameLedgerResponse
     [JsonProperty("players")] public List<LedgerPlayer> Players { get; set; } = new();
 }
 
+public sealed class DealerStats
+{
+    [JsonProperty("games")] public int Games { get; set; }
+    [JsonProperty("active_games")] public int ActiveGames { get; set; }
+    [JsonProperty("total_rounds")] public long TotalRounds { get; set; }
+    [JsonProperty("total_bets")] public long TotalBets { get; set; }
+    [JsonProperty("total_payouts")] public long TotalPayouts { get; set; }
+    [JsonProperty("total_tips")] public long TotalTips { get; set; }
+    [JsonProperty("players_served")] public long PlayersServed { get; set; }
+    [JsonProperty("house_edge")] public long HouseEdge { get; set; }
+}
+
 public sealed class HistoricalLedger
 {
     [JsonProperty("game_info")] public Dictionary<string, object?> GameInfo { get; set; } = new();

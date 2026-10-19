@@ -1,5 +1,6 @@
 import { Api, colorOf, GameStateMsg, HistoryEntry, MeState, PublicBetsMsg, PublicPlayer, Role } from "./protocol";
 import { Wheel } from "./wheel";
+import { Sfx } from "./audio";
 import { Board } from "./board";
 
 // ---------- settings ----------
@@ -24,6 +25,7 @@ function saveSettings(s: Settings) {
 }
 
 const settings = loadSettings();
+const sfx = new Sfx();
 
 // ---------- app state ----------
 
@@ -38,6 +40,7 @@ let wheel: Wheel | null = null;
 let board: Board | null = null;
 let selectedChip = 100;
 let rejoinBets: Record<string, number> | null = null;
+let prevBalance = 0;
 
 // ---------- dom ----------
 
@@ -155,6 +158,7 @@ api.on("public_bets", (d: PublicBetsMsg) => {
 api.on("table_history", (d: { history: HistoryEntry[] }) => {
   lastHistory = d.history ?? [];
   renderHistory();
+  renderStats();
 });
 
 api.on("chat_history", (d: { messages: any[] }) => {
@@ -173,7 +177,19 @@ api.on("spin", (d) => {
 });
 
 api.on("round_result", (d) => {
-  // balances refresh arrives via public_bets/game_state; show net flash
+  // balance delta flash + sound
+  const myId = me?.playerId;
+  if (myId) {
+    const newBal = d.balances?.[myId];
+    if (newBal !== undefined) {
+      const delta = newBal - prevBalance;
+      if (delta !== 0) {
+        flashResult(delta > 0 ? `+${delta.toLocaleString()}` : `−${Math.abs(delta).toLocaleString()}`, delta > 0);
+        if (delta > 0) sfx.win(); else sfx.lose();
+      }
+      prevBalance = newBal;
+    }
+  }
 });
 
 api.on("bets_updated", (d) => {
@@ -185,6 +201,7 @@ api.on("cashout_ok", () => {
 });
 
 api.on("dealer_error", (d) => {
+  sfx.error();
   statusLabel.textContent = d.message ?? "error";
   setTimeout(() => {
     if (statusLabel.textContent === d.message) statusLabel.textContent = "";
@@ -226,6 +243,13 @@ function renderState() {
   if (board && state.chip_denominations?.length) {
     renderChips(state.chip_denominations);
   }
+  const limits = document.getElementById("limits");
+  if (limits) {
+    limits.textContent =
+      `max inside ${state.max_bet_inner.toLocaleString()} · outside ${state.max_bet_outer.toLocaleString()}` +
+      ` · VIP ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()}`;
+  }
+  if (role === "spectator") statusLabel.textContent = "spectating";
 
   // player controls
   if (role === "player" && me) {
@@ -251,6 +275,7 @@ function renderBalance(players: PublicPlayer[]) {
   const mine = players.find((p) => p.id === me!.playerId);
   if (mine) {
     balanceLabel.textContent = `${mine.balance.toLocaleString()} gil`;
+    prevBalance = mine.balance;
     lastNet.textContent = mine.last_round_net === 0 ? "" : mine.last_round_net > 0 ? `▲ ${mine.last_round_net.toLocaleString()}` : `▼ ${Math.abs(mine.last_round_net).toLocaleString()}`;
     lastNet.className = mine.last_round_net >= 0 ? "net pos" : "net neg";
   }
@@ -283,6 +308,7 @@ function renderHistory() {
 function renderHistoryFromSpin(result: number) {
   lastHistory = [...lastHistory, { ts: new Date().toISOString(), result, color: colorOf(result) }];
   renderHistory();
+  renderStats();
 }
 
 function renderChips(denoms: number[]) {
@@ -331,8 +357,20 @@ $("#chat-form").addEventListener("submit", (e) => {
   chatInput.value = "";
 });
 
+// mute toggle
+const muteBtn = $("#mute-btn");
+if (muteBtn) {
+  muteBtn.textContent = sfx.muted ? "🔇" : "🔊";
+  muteBtn.addEventListener("click", () => {
+    sfx.setMuted(!sfx.muted);
+    muteBtn.textContent = sfx.muted ? "🔇" : "🔊";
+    if (!sfx.muted) sfx.ready();
+  });
+}
+
 readyBtn.addEventListener("click", () => {
   if (!state || !me) return;
+  sfx.ready();
   const myId = me.playerId;
   const mine = state.players.find((p) => p.id === myId);
   api.send("set_ready", { ready: !mine?.ready });
@@ -350,8 +388,9 @@ clearBtn.addEventListener("click", () => api.send("clear_my_bets"));
 // ---------- boot ----------
 
 wheel = new Wheel(wheelCanvas);
+wheel.setTickCallback(() => sfx.tick());
 board = new Board(boardEl, {
-  place: (target) => api.send("place_bet", { target, amount: selectedChip }),
+  place: (target) => { sfx.chip(); api.send("place_bet", { target, amount: selectedChip }); },
   remove: (target) => api.send("remove_bet", { target }),
 });
 
@@ -361,9 +400,46 @@ if (auto) {
   gameId = auto.gameId;
   playerKey = auto.playerKey;
   ($("#join-game") as HTMLInputElement).value = auto.gameId;
-  ($("#join-key") as HTMLInputElement).value = auto.playerKey;
+  (  $("#join-key") as HTMLInputElement).value = auto.playerKey;
+  tryAutoJoin();
 }
 
+function flashResult(text: string, positive: boolean): void {
+  const el = document.getElementById("result-flash");
+  if (!el) return;
+  el.textContent = text;
+  el.className = "result-flash " + (positive ? "pos" : "neg");
+  void el.offsetWidth; // restart animation
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+function renderStats(): void {
+  const el = document.getElementById("stats-bar");
+  if (!el) return;
+  const recent = lastHistory.slice(-24);
+  if (recent.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+  let red = 0, black = 0, green = 0, odd = 0, even = 0;
+  const counts = new Map<number, number>();
+  for (const h of recent) {
+    if (h.color === "red") red++;
+    else if (h.color === "black") black++;
+    else green++;
+    if (h.result !== 0) {
+      if (h.result % 2 === 1) odd++; else even++;
+    }
+    counts.set(h.result, (counts.get(h.result) ?? 0) + 1);
+  }
+  const hot = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([n, c]) => `${n}(${c})`).join(" ");
+  el.innerHTML =
+    `<span class="sc red">R ${red}</span><span class="sc black">B ${black}</span><span class="sc green">G ${green}</span>` +
+    `<span class="sc">ODD ${odd}</span><span class="sc">EVEN ${even}</span>` +
+    `<span class="sc hot">HOT ${hot || "—"}</span>`;
+}
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }

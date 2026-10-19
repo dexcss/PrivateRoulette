@@ -15,18 +15,27 @@ public sealed class PluginUi : IDisposable
     private readonly WindowSystem windowSystem = new("PrivateRoulette");
     private readonly MainWindow main;
     private readonly SettingsWindow settings;
+    private readonly WheelWindow wheel;
     private readonly IPluginLog log;
 
     public PluginUi(IDalamudPluginInterface pluginInterface, PluginConfig config, SocketService socket, RouletteSession session, IPluginLog log)
     {
         this.log = log;
-        this.main = new MainWindow(config, socket, session, log);
+        this.wheel = new WheelWindow(config, session, log);
+        this.main = new MainWindow(config, socket, session, log, this.ShowWheel);
         this.settings = new SettingsWindow(config);
         this.windowSystem.AddWindow(this.main);
+        this.windowSystem.AddWindow(this.wheel);
         this.windowSystem.AddWindow(this.settings);
         pluginInterface.UiBuilder.Draw += this.windowSystem.Draw;
         pluginInterface.UiBuilder.OpenConfigUi += this.OpenSettings;
         pluginInterface.UiBuilder.OpenMainUi += this.OpenMain;
+    }
+
+    public void ShowWheel()
+    {
+        this.wheel.IsOpen = true;
+        this.wheel.BringToFront();
     }
 
     public void OpenMain()

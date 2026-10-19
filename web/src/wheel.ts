@@ -36,6 +36,8 @@ export class Wheel {
   private spin: SpinState | null = null;
   private lastFrame = 0;
   private onSettle?: (result: number) => void;
+  private onTick?: () => void;
+  private lastTickPocket = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -55,6 +57,10 @@ export class Wheel {
 
   setSettleCallback(cb: (result: number) => void) {
     this.onSettle = cb;
+  }
+
+  setTickCallback(cb: () => void) {
+    this.onTick = cb;
   }
 
   dispose() {
@@ -136,6 +142,13 @@ export class Wheel {
       b = base + wobble;
     }
     this.ballAngle = b;
+
+    // pocket-crossing ticks (rate follows the ball naturally)
+    const pocket = Math.floor(((b - this.wheelAngle) % TAU + TAU) % TAU / POCKET);
+    if (pocket !== this.lastTickPocket) {
+      this.lastTickPocket = pocket;
+      this.onTick?.();
+    }
   }
 
   private ballAngle = 0;

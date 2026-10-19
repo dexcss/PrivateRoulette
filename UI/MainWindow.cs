@@ -23,6 +23,7 @@ public sealed class MainWindow : Window
     private readonly SocketService socket;
     private readonly RouletteSession session;
     private readonly IPluginLog log;
+    private readonly Action showWheel;
 
     private string newPlayerName = string.Empty;
     private int newPlayerBankrollInt;
@@ -31,16 +32,19 @@ public sealed class MainWindow : Window
     private SpinMode selectedMode = SpinMode.Control;
     private string apiKeyInput = string.Empty;
     private int adjustAmountInt = 100;
+    private bool newPlayerVip;
+    private bool newPlayerFreeplay;
 
-    public MainWindow(PluginConfig config, SocketService socket, RouletteSession session, IPluginLog log)
+    public MainWindow(PluginConfig config, SocketService socket, RouletteSession session, IPluginLog log, Action showWheel)
         : base("Private Roulette — Dealer Console")
     {
         this.config = config;
         this.socket = socket;
         this.session = session;
         this.log = log;
+        this.showWheel = showWheel;
 
-        this.Size = new Vector2(760, 620);
+        this.Size = new Vector2(820, 660);
         this.SizeCondition = ImGuiCond.FirstUseEver;
         this.SizeConstraints = new WindowSizeConstraints
         {
@@ -71,6 +75,8 @@ public sealed class MainWindow : Window
             this.DrawLobby();
             return;
         }
+
+        this.DrawGameHeaderButtons();
 
         // two-column: table state | controls — both scroll independently
         if (ImGui.BeginTable("mainCols", 2, ImGuiTableFlags.Resizable))
@@ -195,6 +201,37 @@ public sealed class MainWindow : Window
         }
     }
 
+    private void DrawGameHeaderButtons()
+    {
+        if (ImGui.Button("Open web table"))
+            OpenUrl($"https://dexcss.github.io/PrivateRoulette/#/spectate/{this.session.GameId}");
+        ImGui.SameLine();
+        if (ImGui.Button("Show wheel"))
+            this.showWheel();
+        ImGui.SameLine();
+        if (ImGui.Button("End game"))
+            this.session.EndGame();
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Delete game (Ctrl+click)"))
+        {
+            if (ImGui.GetIO().KeyCtrl)
+                this.session.DeleteGame();
+        }
+        ImGui.Separator();
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
     private void DrawLobby()
     {
         ImGui.TextUnformatted("No active game");
@@ -224,6 +261,20 @@ public sealed class MainWindow : Window
                 this.session.JoinGame(g.Id);
                 return;
             }
+        }
+
+        SectionText("Dealer stats");
+        if (ImGui.Button("Refresh stats"))
+            this.session.GetStats();
+        var stats = this.session.Stats;
+        if (stats != null)
+        {
+            ImGui.TextUnformatted($"games {stats.Games} (active {stats.ActiveGames}) · rounds {stats.TotalRounds:N0} · players served {stats.PlayersServed:N0}");
+            ImGui.TextUnformatted($"bets {stats.TotalBets:N0} · payouts {stats.TotalPayouts:N0} · tips {stats.TotalTips:N0} · house edge {stats.HouseEdge:N0}");
+        }
+        else
+        {
+            ImGui.TextDisabled("press Refresh stats to load totals");
         }
 
         // create-game inputs wrote into config directly; persist on change
@@ -286,6 +337,9 @@ public sealed class MainWindow : Window
                     if (link != null)
                         ImGui.SetClipboardText(link);
                 }
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Cash out"))
+                    this.session.CashoutPlayer(p.Id);
                 ImGui.PopID();
             }
 
@@ -294,9 +348,13 @@ public sealed class MainWindow : Window
 
         ImGui.InputText("Name (Char@World or display)", ref newPlayerName, 64);
         ImGui.InputInt("Buy-in", ref newPlayerBankrollInt);
+        ImGui.SameLine();
+        ImGui.Checkbox("VIP", ref newPlayerVip);
+        ImGui.SameLine();
+        ImGui.Checkbox("Free play", ref newPlayerFreeplay);
         ImGui.BeginDisabled(string.IsNullOrWhiteSpace(newPlayerName));
         if (ImGui.Button("Add player"))
-            this.session.AddPlayer(newPlayerName.Trim(), newPlayerName.Trim().Split('@')[0], newPlayerBankrollInt);
+            this.session.AddPlayer(newPlayerName.Trim(), newPlayerName.Trim().Split('@')[0], newPlayerBankrollInt, newPlayerVip, newPlayerFreeplay);
         ImGui.EndDisabled();
 
         SectionText("Last spin");
@@ -352,6 +410,11 @@ public sealed class MainWindow : Window
             return;
         }
 
+        if (ImGui.SmallButton("Export CSV"))
+            this.ExportLedgerCsv(ledger);
+        ImGui.SameLine();
+        ImGui.TextDisabled("writes to pluginConfigs/PrivateRoulette/exports");
+
         if (ledger.Summary is { } summary)
         {
             ImGui.TextUnformatted($"rounds: {summary.GetValueOrDefault("total_rounds")} · bets: {FormatGil(summary.GetValueOrDefault("total_buy_ins"))} · tips: {FormatGil(summary.GetValueOrDefault("total_tips"))}");
@@ -388,6 +451,51 @@ public sealed class MainWindow : Window
         {
             ImGui.TextDisabled("no rounds played yet");
         }
+    }
+
+    private void ExportLedgerCsv(HistoricalLedger ledger)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "XIVLauncher", "pluginConfigs", "PrivateRoulette", "exports");
+            System.IO.Directory.CreateDirectory(dir);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("section,round,player,bet_type,amount,payout,time");
+            foreach (var r in ledger.Rounds)
+            {
+                sb.AppendLine($"round,{r.GetValueOrDefault("round_number")},,winning_number={r.GetValueOrDefault("winning_number")},{r.GetValueOrDefault("total_bets")},{r.GetValueOrDefault("total_payouts")},{r.GetValueOrDefault("spun_at")}");
+            }
+            foreach (var b in ledger.AllBets)
+            {
+                sb.AppendLine($"bet,{b.GetValueOrDefault("round_number")},{Csv(b.GetValueOrDefault("player_name"))},{Csv(b.GetValueOrDefault("bet_type"))},{b.GetValueOrDefault("bet_amount")},{b.GetValueOrDefault("payout_amount")},{b.GetValueOrDefault("placed_at")}");
+            }
+            foreach (var p in ledger.Players)
+            {
+                sb.AppendLine($"player,,{Csv(p.GetValueOrDefault("player_name"))},,{p.GetValueOrDefault("buy_in_amount")},{p.GetValueOrDefault("cash_out_amount")},{p.GetValueOrDefault("joined_at")}");
+            }
+            foreach (var a in ledger.Adjustments)
+            {
+                sb.AppendLine($"adjustment,,{Csv(a.GetValueOrDefault("player_name"))},{Csv(a.GetValueOrDefault("reason"))},{a.GetValueOrDefault("adjustment_amount")},,{a.GetValueOrDefault("adjusted_at")}");
+            }
+
+            var path = System.IO.Path.Combine(dir, $"{this.session.GameId}_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+            System.IO.File.WriteAllText(path, sb.ToString());
+            this.session.Echo($"[table] ledger exported: {path}");
+        }
+        catch (Exception e)
+        {
+            this.log.Error(e, "ledger export failed");
+            this.session.Echo("[table] ledger export failed: " + e.Message);
+        }
+    }
+
+    private static string Csv(object? v)
+    {
+        var s = v?.ToString() ?? string.Empty;
+        return s.Contains(',') || s.Contains('"') ? '"' + s.Replace("\"", "\"\"") + '"' : s;
     }
 
     private static string FormatGil(object? v)

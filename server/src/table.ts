@@ -356,6 +356,8 @@ export class TableRoom extends DurableObject<Env> {
           if (typeof d.text === "string" && d.text.trim().length > 0) this.dealerChat(d.text.trim().slice(0, 300));
           break;
         case "get_ledger": this.send(ws, "ledger", this.ledgerView()); break;
+        case "get_stats": await this.sendStats(ws); break;
+        case "cashout_player": await this.dealerCashout(ws, d); break;
         case "end_game": await this.endGame(ws); break;
         case "delete_game": await this.deleteGame(ws); break;
 
@@ -742,6 +744,49 @@ export class TableRoom extends DurableObject<Env> {
     }
     this.state = null;
     this.send(ws, "games_list", { games: await this.listGameSummaries() });
+  }
+
+  /** Dealer settles a player who is leaving: records the cash-out and clears the seat. */
+  private async dealerCashout(ws: WebSocket, d: any): Promise<void> {
+    const g = this.state!;
+    const p = g.players.find((x) => x.id === d.player_id && !x.left_at);
+    if (!p) return this.err(ws, "player not found");
+    p.cash_out_amount = p.balance;
+    p.balance = 0;
+    p.ready = false;
+    p.bets = {};
+    p.left_at = nowIso();
+    await this.save();
+    this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
+    this.broadcast("game_state", dealerStateView(g));
+    this.systemChat(`${p.display_name} cashed out ${p.cash_out_amount.toLocaleString()} gil.`);
+    this.send(ws, "dealer_ok", { message: `Cashed out ${p.display_name}: ${p.cash_out_amount.toLocaleString()} gil` });
+  }
+
+  /** Aggregate stats across all non-deleted games ever hosted. */
+  private async sendStats(ws: WebSocket): Promise<void> {
+    const entries = await this.ctx.storage.list<GameState>({ prefix: "game:" });
+    let games = 0, activeGames = 0, rounds = 0, bets = 0, payouts = 0, tips = 0, playersServed = 0;
+    for (const [, s] of entries) {
+      if (s.game_status === "deleted") continue;
+      games++;
+      if (s.game_status === "active") activeGames++;
+      rounds += s.rounds.length;
+      bets += s.rounds.reduce((a, r) => a + r.total_bets, 0);
+      payouts += s.rounds.reduce((a, r) => a + r.total_payouts, 0);
+      tips += s.total_tips;
+      playersServed += s.players.length;
+    }
+    this.send(ws, "dealer_stats", {
+      games,
+      active_games: activeGames,
+      total_rounds: rounds,
+      total_bets: bets,
+      total_payouts: payouts,
+      total_tips: tips,
+      players_served: playersServed,
+      house_edge: bets - payouts,
+    });
   }
 
   // ================= player operations =================

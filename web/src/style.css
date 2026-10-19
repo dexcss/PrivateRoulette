@@ -194,3 +194,42 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
   main { grid-template-columns: 1fr; overflow-y: auto; }
   .chat { height: 150px; }
 }
+
+/* ---------- v0.3 additions ---------- */
+
+.icon-btn {
+  background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  padding: 4px 8px; font-size: 14px; line-height: 1;
+}
+
+.limits { font-size: 11.5px; color: var(--muted); }
+
+.stats-bar {
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 12px;
+}
+.stats-bar .sc {
+  padding: 3px 9px; border-radius: 999px; background: var(--panel);
+  border: 1px solid var(--line); color: var(--muted);
+}
+.stats-bar .sc.red { color: #ff7b6b; border-color: #7a2a20; }
+.stats-bar .sc.black { color: #cfd4dc; }
+.stats-bar .sc.green { color: #55d98d; border-color: #1e5c3a; }
+.stats-bar .sc.hot { color: var(--gold); border-color: #5c4a10; }
+
+.result-flash {
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  font-size: 56px; font-weight: 900; letter-spacing: 1px;
+  pointer-events: none; opacity: 0; z-index: 50;
+  text-shadow: 0 4px 24px rgba(0,0,0,.6);
+  transition: opacity .15s ease;
+}
+.result-flash.show { animation: flashpop 2.2s ease forwards; }
+.result-flash.pos { color: #58e08a; }
+.result-flash.neg { color: #ff6b5b; }
+@keyframes flashpop {
+  0% { opacity: 0; transform: translate(-50%, -35%) scale(.7); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  25% { transform: translate(-50%, -50%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -64%) scale(1); }
+}

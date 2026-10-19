@@ -46,14 +46,18 @@
     <header>
       <span id="table-info" class="table-info"></span>
       <span id="status" class="status"></span>
+      <button id="mute-btn" class="icon-btn" title="Toggle sound">🔊</button>
       <span id="balance" class="balance"></span>
       <span id="last-net" class="net"></span>
     </header>
+
+    <div id="result-flash" class="result-flash"></div>
 
     <main>
       <div class="left">
         <div class="wheel-wrap"><canvas id="wheel"></canvas></div>
         <div id="history" class="history"></div>
+        <div id="stats-bar" class="stats-bar"></div>
         <div id="control-note" class="fair-note small" hidden></div>
         <div id="proof-line" class="proof"></div>
       </div>
@@ -63,6 +67,7 @@
 
         <div id="bet-wrap" class="bet-wrap">
           <div id="chips" class="chips"></div>
+          <div id="limits" class="limits"></div>
           <div class="board-outer">
             <div id="board"></div>
             <div id="betting-blocker" hidden><span id="lock-label"></span></div>

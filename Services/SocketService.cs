@@ -65,6 +65,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public event Action<AwayUpdate>? AwayUpdated;
     public event Action<PublicBets>? PublicBets;
     public event Action<HistoricalLedger>? Ledger;
+    public event Action<DealerStats>? DealerStats;
     public event Action<string, string>? DealerError;  // (message, raw)
     public event Action<string, string>? DealerOk;     // (message, raw)
     public event Action<string>? GameClosed;
@@ -310,6 +311,9 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
             case "ledger":
                 this.MainThreadRaise(this.Read<HistoricalLedger>(d), this.Ledger);
                 break;
+            case "dealer_stats":
+                this.MainThreadRaise(this.Read<DealerStats>(d), this.DealerStats);
+                break;
             case "game_closed":
                 this.MainThread(() => this.GameClosed?.Invoke(d["game_id"]?.ToString() ?? ""));
                 break;
@@ -392,8 +396,13 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
     public Task JoinGameAsync(string gameId) => this.SendAsync("join_game", new { game_id = gameId });
 
-    public Task AddPlayerAsync(string name, string displayName, long bankroll, string gameId)
-        => this.SendAsync("add_player", new { name, display_name = displayName, bankroll, game_id = gameId });
+    public Task AddPlayerAsync(string name, string displayName, long bankroll, string gameId, bool isVip = false, bool isFreeplay = false)
+        => this.SendAsync("add_player", new { name, display_name = displayName, bankroll, game_id = gameId, is_vip = isVip, is_freeplay = isFreeplay });
+
+    public Task GetStatsAsync() => this.SendAsync("get_stats");
+
+    public Task CashoutPlayerAsync(string playerId, string gameId)
+        => this.SendAsync("cashout_player", new { player_id = playerId, game_id = gameId });
 
     public Task AdjustBalanceAsync(string playerId, long delta, string gameId)
         => this.SendAsync("adjust_balance", new { player_id = playerId, delta, game_id = gameId });
