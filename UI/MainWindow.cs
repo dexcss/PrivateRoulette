@@ -159,24 +159,30 @@ public sealed class MainWindow : Window
         ImGui.TextUnformatted("Backend authentication");
         ImGui.TextDisabled($"{name}@{world}");
 
+        ImGui.TextDisabled($"Backend: {this.config.ApiUrl}");
+        ImGui.Separator();
+
         var token = this.session.DealerToken;
         if (string.IsNullOrEmpty(token))
         {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudYellow);
             ImGui.TextUnformatted("No dealer token configured.");
             ImGui.PopStyleColor();
-            ImGui.TextDisabled("Set the DEALER_TOKEN secret on your worker, then paste the same value here:");
-            apiKeyInput = token;
+            // NOTE: do not copy config → input here; that would wipe the user's
+            // typing every frame. apiKeyInput starts empty and is saved on click.
+            ImGui.TextDisabled("Paste your dealer token below (run Get-Content $env:TEMP\\opencode\\pr_dealer_token.txt to see it):");
             ImGui.InputText("##token", ref apiKeyInput, 128, ImGuiInputTextFlags.Password);
             if (ImGui.Button("Save token") && !string.IsNullOrWhiteSpace(apiKeyInput))
             {
                 this.session.SetDealerToken(apiKeyInput.Trim());
+                apiKeyInput = string.Empty;
+                // connect immediately instead of waiting out the retry backoff
+                _ = this.socket.StartAsync();
             }
         }
         else
         {
             ImGui.TextDisabled("Dealer token configured.");
-            ImGui.TextDisabled($"Backend: {this.config.ApiUrl}");
             if (ImGui.Button("Reconnect"))
                 _ = this.socket.StartAsync();
         }

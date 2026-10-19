@@ -115,7 +115,14 @@ public sealed class PluginConfig : IPluginConfiguration
 
     [JsonIgnore] private IDalamudPluginInterface? pluginInterface;
 
-    public void Initialize(IDalamudPluginInterface pluginInterface) => this.pluginInterface = pluginInterface;
+    public void Initialize(IDalamudPluginInterface pluginInterface)
+    {
+        this.pluginInterface = pluginInterface;
+
+        // Migration: configs saved by v0.2.0 carry a placeholder backend URL — heal it.
+        if (string.IsNullOrEmpty(this.ApiUrl) || this.ApiUrl.Contains("YOUR-SUBDOMAIN", StringComparison.OrdinalIgnoreCase))
+            this.ApiUrl = "wss://private-roulette-api.dexcss-roulette.workers.dev/ws";
+    }
 
     public void Save() => this.pluginInterface?.SavePluginConfig(this);
 }
