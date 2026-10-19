@@ -18,8 +18,10 @@ namespace PrivateRoulette.Services;
 /// <summary>
 /// WebSocket connection to the Private Roulette backend (Cloudflare Worker +
 /// Durable Object). Plain JSON envelope protocol: {"t":"<event>","d":{...}}.
-/// No third-party services, no Socket.IO. All callbacks are marshalled onto the
-/// framework thread via <see cref="RunOnMainThread"/>.
+///
+/// Connection management is driven by <see cref="Tick"/> on the framework
+/// thread — no background watchdog tasks. All sends are serialized through a
+/// single gate because ClientWebSocket permits only one outstanding send.
 /// </summary>
 public sealed class SocketService : IDisposable, IAsyncDisposable
 {
@@ -28,16 +30,14 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
     private ClientWebSocket? ws;
     private CancellationTokenSource? cts;
+    private readonly SemaphoreSlim sendLock = new(1, 1);
     private bool connecting;
     private bool disposed;
     private int reconnectAttempt;
-    private Func<object>? helloProvider;
-
-    // ---- watchdog: detect zombie sockets the OS still considers "open" ----
+    private DateTimeOffset lastAttempt = DateTimeOffset.MinValue;
     private DateTimeOffset lastServerActivity = DateTimeOffset.UtcNow;
-    private DateTimeOffset lastPongUtc = DateTimeOffset.MinValue;
     private DateTimeOffset pingSentAt = DateTimeOffset.MinValue;
-    private Task? watchdogTask;
+    private Func<object>? helloProvider;
 
     /// <summary>Marshals socket-thread work to the framework thread. Set by the plugin.</summary>
     public Action<Action>? RunOnMainThread { get; set; }
@@ -78,65 +78,103 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
         this.log = log;
     }
 
-    public async Task StartAsync()
+    /// <summary>Called every framework tick. Owns connect retries and the heartbeat.</summary>
+    public void Tick()
     {
-        if (this.disposed || this.connecting) return;
-        if (this.ws?.State == WebSocketState.Open) return; // healthy — do not churn
+        if (this.disposed) return;
+        var now = DateTimeOffset.UtcNow;
 
-        await this.ConnectCoreAsync().ConfigureAwait(false);
+        if (this.ws?.State != WebSocketState.Open)
+        {
+            // reconnect with backoff
+            var delay = Math.Min(2 * Math.Max(1, this.reconnectAttempt), 30);
+            if (!this.connecting && (now - this.lastAttempt).TotalSeconds >= delay)
+                _ = this.ConnectAsync();
+            return;
+        }
+
+        var silent = (now - this.lastServerActivity).TotalSeconds;
+
+        // ping after 12s of silence; drop the connection if nothing answers by 25s
+        if (silent > 25)
+        {
+            this.log.Warning($"backend silent for {silent:0}s — reconnecting");
+            this.DropConnection("watchdog: backend silent");
+            return;
+        }
+
+        if (silent > 12 && (now - this.pingSentAt).TotalSeconds > 10)
+        {
+            this.pingSentAt = now;
+            _ = this.SendRawAsync("{\"t\":\"ping\",\"d\":{}}");
+        }
     }
 
-    /// <summary>Tears down whatever exists and opens a fresh connection.</summary>
-    private async Task ForceReconnectAsync()
+    public Task StartAsync()
     {
-        if (this.disposed || this.connecting) return;
+        if (this.disposed || this.connecting || this.ws?.State == WebSocketState.Open)
+            return Task.CompletedTask;
+
+        return this.ConnectAsync();
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (this.connecting || this.disposed) return;
         this.connecting = true;
+        this.lastAttempt = DateTimeOffset.UtcNow;
         try
         {
             this.cts?.Cancel();
             try { this.ws?.Dispose(); } catch { }
-        }
-        catch { }
-        this.connecting = false;
-        await this.ConnectCoreAsync().ConfigureAwait(false);
-    }
+            this.ws = null;
 
-    private async Task ConnectCoreAsync()
-    {
-        if (this.connecting || this.disposed) return;
-        this.connecting = true;
-        try
-        {
-            this.cts = new CancellationTokenSource();
+            var localCts = new CancellationTokenSource();
+            this.cts = localCts;
+
             var socket = new ClientWebSocket();
             socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
-            await socket.ConnectAsync(new Uri(this.config.ApiUrl), this.cts.Token).ConfigureAwait(false);
-            this.ws = socket;
 
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(localCts.Token, timeout.Token);
+
+            await socket.ConnectAsync(new Uri(this.config.ApiUrl), linked.Token).ConfigureAwait(false);
+
+            this.ws = socket;
             this.reconnectAttempt = 0;
             this.lastServerActivity = DateTimeOffset.UtcNow;
-            this.lastPongUtc = DateTimeOffset.MinValue;
             this.pingSentAt = DateTimeOffset.MinValue;
             this.log.Debug("backend connected");
-            this.watchdogTask = Task.Run(() => this.WatchdogLoop(this.cts!.Token));
+
+            _ = this.ReceiveLoop(socket, localCts.Token);
+
             this.MainThread(() =>
             {
                 this.Connected?.Invoke();
                 if (this.helloProvider != null)
                     _ = this.SendAsync("hello", this.helloProvider());
             });
-
-            _ = this.ReceiveLoop(socket, this.cts.Token);
         }
         catch (Exception e)
         {
-            this.log.Error(e, "connect failed");
-            _ = this.ReconnectLaterAsync();
+            this.reconnectAttempt++;
+            this.log.Warning($"connect failed ({this.reconnectAttempt}): {e.Message}");
+            this.ws = null;
         }
         finally
         {
             this.connecting = false;
         }
+    }
+
+    private void DropConnection(string reason)
+    {
+        this.log.Info($"disconnecting: {reason}");
+        try { this.cts?.Cancel(); } catch { }
+        try { this.ws?.Dispose(); } catch { }
+        this.ws = null;
+        this.pingSentAt = DateTimeOffset.MinValue;
+        this.MainThread(() => this.Disconnected?.Invoke(reason));
     }
 
     private async Task ReceiveLoop(ClientWebSocket socket, CancellationToken ct)
@@ -153,13 +191,16 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
                     result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None).ConfigureAwait(false);
-                        this.OnDisconnected("server closed connection");
+                        this.log.Info($"server closed connection: {result.CloseStatus} {result.CloseStatusDescription}");
+                        this.DropConnection("server closed");
                         return;
                     }
                     message.Write(buffer, 0, result.Count);
                 }
                 while (!result.EndOfMessage);
+
+                this.lastServerActivity = DateTimeOffset.UtcNow;
+                this.pingSentAt = DateTimeOffset.MinValue;
 
                 var text = Encoding.UTF8.GetString(message.ToArray());
                 JObject env;
@@ -174,88 +215,18 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
                 var t = env["t"]?.ToString() ?? "";
                 var d = env["d"] as JObject ?? new JObject();
-                this.lastServerActivity = DateTimeOffset.UtcNow;
                 this.Dispatch(t, d);
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // expected on drop/dispose
+        }
         catch (Exception e)
         {
-            this.log.Debug(e, "receive loop ended");
-            this.OnDisconnected(e.Message);
+            this.log.Warning($"receive loop ended: {e.Message}");
+            this.DropConnection("receive error");
         }
-    }
-
-    private void OnDisconnected(string reason)
-    {
-        this.log.Debug($"disconnected: {reason}");
-        this.MainThread(() =>
-        {
-            this.Disconnected?.Invoke(reason);
-        });
-        if (!this.disposed)
-            _ = this.ReconnectLaterAsync();
-    }
-
-    /// <summary>
-    /// Application-level heartbeat. Protocol keepalives can't detect a socket
-    /// that the remote side silently orphaned (e.g. after a backend deploy),
-    /// so we ping and expect pong — silence forces a reconnect.
-    /// </summary>
-    private async Task WatchdogLoop(CancellationToken ct)
-    {
-        try
-        {
-            while (!ct.IsCancellationRequested && !this.disposed)
-            {
-                await Task.Delay(5000, ct).ConfigureAwait(false);
-                var socket = this.ws;
-                if (socket?.State != WebSocketState.Open) continue;
-
-                var sinceActivity = DateTimeOffset.UtcNow - this.lastServerActivity;
-                var sincePing = DateTimeOffset.UtcNow - this.pingSentAt;
-
-                var pingUnanswered = this.pingSentAt > DateTimeOffset.MinValue
-                                     && sincePing.TotalSeconds > 12
-                                     && this.lastPongUtc < this.pingSentAt;
-
-                if (pingUnanswered)
-                {
-                    this.log.Warning($"backend silent for {sinceActivity.TotalSeconds:0}s (ping unanswered {sincePing.TotalSeconds:0}s) — forcing reconnect");
-                    this.pingSentAt = DateTimeOffset.MinValue;
-                    try { socket.Dispose(); } catch { }
-                    this.OnDisconnected("watchdog: backend silent");
-                    return;
-                }
-
-                if (sinceActivity.TotalSeconds > 15)
-                {
-                    this.pingSentAt = DateTimeOffset.UtcNow;
-                    try
-                    {
-                        var ping = Encoding.UTF8.GetBytes("{\"t\":\"ping\",\"d\":{}}");
-                        await socket.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        this.OnDisconnected("watchdog: ping failed");
-                        return;
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch { }
-    }
-
-    private async Task ReconnectLaterAsync()
-    {
-        if (this.disposed) return;
-        var attempt = ++this.reconnectAttempt;
-        var delay = TimeSpan.FromSeconds(Math.Min(2 * attempt, 30));
-        this.log.Debug($"reconnect attempt {attempt} in {delay.TotalSeconds:0}s");
-        await Task.Delay(delay).ConfigureAwait(false);
-        await this.ForceReconnectAsync().ConfigureAwait(false);
     }
 
     private void Dispatch(string t, JObject d)
@@ -265,6 +236,8 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
         switch (t)
         {
+            case "pong":
+                break;
             case "hello_ok":
                 if ((d["role"]?.ToString() ?? "") == "dealer")
                     this.MainThread(() => this.AuthOk?.Invoke());
@@ -317,9 +290,6 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
             case "game_closed":
                 this.MainThread(() => this.GameClosed?.Invoke(d["game_id"]?.ToString() ?? ""));
                 break;
-            case "pong":
-                this.lastPongUtc = DateTimeOffset.UtcNow;
-                break;
             case "dealer_error":
                 var errMsg = d["message"]?.ToString() ?? "error";
                 this.MainThread(() => this.DealerError?.Invoke(errMsg, d.ToString(Formatting.None)));
@@ -359,21 +329,36 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
     // ---- sending ----
 
+    private async Task SendRawAsync(string json)
+    {
+        await this.sendLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var socket = this.ws;
+            if (socket?.State != WebSocketState.Open)
+                throw new InvalidOperationException("not connected");
+
+            var bytes = Encoding.UTF8.GetBytes(json);
+            await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            this.log.Warning($"send failed: {e.Message}");
+            this.DropConnection("send failed");
+        }
+        finally
+        {
+            this.sendLock.Release();
+        }
+    }
+
     public async Task SendAsync(string eventName, object? payload = null)
     {
-        var socket = this.ws;
-        if (socket?.State != WebSocketState.Open)
-        {
-            this.log.Warning($"cannot send {eventName}: not connected");
-            return;
-        }
-
         var env = new JObject { ["t"] = eventName, ["d"] = payload == null ? new JObject() : JObject.FromObject(payload) };
         if (this.config.VerboseWireLog)
             this.log.Debug($"[wire] → {eventName} {env["d"]!.ToString(Formatting.None)}");
 
-        var bytes = Encoding.UTF8.GetBytes(env.ToString(Formatting.None));
-        await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+        await this.SendRawAsync(env.ToString(Formatting.None)).ConfigureAwait(false);
     }
 
     // ---- convenience emits (dealer) ----
@@ -399,15 +384,15 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public Task AddPlayerAsync(string name, string displayName, long bankroll, string gameId, bool isVip = false, bool isFreeplay = false)
         => this.SendAsync("add_player", new { name, display_name = displayName, bankroll, game_id = gameId, is_vip = isVip, is_freeplay = isFreeplay });
 
-    public Task GetStatsAsync() => this.SendAsync("get_stats");
-
-    public Task CashoutPlayerAsync(string playerId, string gameId)
-        => this.SendAsync("cashout_player", new { player_id = playerId, game_id = gameId });
-
     public Task AdjustBalanceAsync(string playerId, long delta, string gameId)
         => this.SendAsync("adjust_balance", new { player_id = playerId, delta, game_id = gameId });
 
     public Task GetLedgerAsync(string gameId) => this.SendAsync("get_ledger", new { game_id = gameId });
+
+    public Task GetStatsAsync() => this.SendAsync("get_stats");
+
+    public Task CashoutPlayerAsync(string playerId, string gameId)
+        => this.SendAsync("cashout_player", new { player_id = playerId, game_id = gameId });
 
     public Task RequestSpinAsync(string gameId) => this.SendAsync("request_spin", new { game_id = gameId });
 
@@ -439,7 +424,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         this.disposed = true;
-        this.cts?.Cancel();
+        try { this.cts?.Cancel(); } catch { }
         try { this.ws?.Dispose(); } catch { }
         await Task.CompletedTask;
     }
@@ -447,7 +432,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public void Dispose()
     {
         this.disposed = true;
-        this.cts?.Cancel();
+        try { this.cts?.Cancel(); } catch { }
         try { this.ws?.Dispose(); } catch { }
     }
 }

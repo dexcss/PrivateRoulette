@@ -63,22 +63,12 @@ public sealed class Plugin : IDalamudPlugin
         this.framework.Update += this.OnFrameworkUpdate;
     }
 
-    private bool socketStarted;
-
     private void OnFrameworkUpdate(IFramework framework)
     {
         // Access control: never connect for non-whitelisted characters.
         if (this.session.EvaluateAuthorization())
         {
-            if (!this.socketStarted)
-            {
-                this.socketStarted = true;
-                this.socket.StartAsync().ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                        this.log.Error(t.Exception, "socket startup failed");
-                });
-            }
+            this.socket.Tick();
 
             // Drain work produced on socket threads; UI/state mutations happen here only.
             while (this.mainThreadQueue.TryDequeue(out var action))

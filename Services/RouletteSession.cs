@@ -102,11 +102,7 @@ public sealed class RouletteSession : IDisposable
 
     private void OnConnected()
     {
-        var hello = this.CurrentHello();
-        if (hello != null)
-            _ = this.socket.SendAsync("hello", hello);
-        else
-            this.log.Warning("no dealer token configured — set it in /pr config");
+        this.log.Debug("connected — hello handled by socket service");
     }
 
     private void OnAuthOk()
