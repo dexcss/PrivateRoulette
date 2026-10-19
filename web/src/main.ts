@@ -225,7 +225,7 @@ function renderState() {
     <span class="pill ${state.game_status}">${state.game_status}</span>`;
 
   if (state.spin_mode === "control") {
-    controlNote.textContent = `Provable fairness — control #${state.control_number}. Formula: sha256("<dice>:<control>") → first 8 hex as uint32 → % 37.`;
+    controlNote.textContent = `Provable fairness — control #${state.control_number}. Formula: sha256("<dice>:<control>") → first 8 hex as uint32 → % 38.`;
     controlNote.hidden = false;
   } else {
     controlNote.hidden = true;

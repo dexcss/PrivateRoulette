@@ -212,8 +212,8 @@ export class Wheel {
     this.ring(c, R * 0.905, R * 0.885, { inner: "rgba(0,0,0,0.65)", outer: "rgba(0,0,0,0.25)" }, 0, TAU);
 
     // ---- pocket ring ----
-    const pocketOuter = R * 0.885;
-    const pocketInner = R * 0.6;
+    const pocketOuter = R * 0.875;
+    const pocketInner = R * 0.46;
     for (let i = 0; i < 38; i++) {
       const n = ORDER[i];
       const a0 = this.wheelAngle + i * SLOT - SLOT / 2 - Math.PI / 2;
@@ -249,12 +249,12 @@ export class Wheel {
 
       // number plate
       const am = a0 + SLOT / 2;
-      const tr = pocketOuter - R * 0.055;
+      const tr = pocketOuter - R * 0.052;
       ctx.save();
       ctx.translate(c + Math.cos(am) * tr, c + Math.sin(am) * tr);
       ctx.rotate(am + Math.PI / 2);
       ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.font = `700 ${Math.max(9, R * 0.05)}px "Segoe UI", system-ui, sans-serif`;
+      ctx.font = `800 ${Math.max(10, R * 0.052)}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(labelOf(n), 0.6, 0.8);
@@ -278,23 +278,23 @@ export class Wheel {
       const a = this.wheelAngle + (i * TAU) / 8;
       const grad = ctx.createLinearGradient(
         c + Math.cos(a) * R * 0.12, c + Math.sin(a) * R * 0.12,
-        c + Math.cos(a) * R * 0.56, c + Math.sin(a) * R * 0.56,
+        c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44,
       );
       grad.addColorStop(0, "rgba(232,207,134,0.55)");
       grad.addColorStop(1, "rgba(232,207,134,0.08)");
       ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a) * R * 0.11, c + Math.sin(a) * R * 0.11);
-      ctx.lineTo(c + Math.cos(a) * R * 0.56, c + Math.sin(a) * R * 0.56);
+      ctx.moveTo(c + Math.cos(a) * R * 0.075, c + Math.sin(a) * R * 0.075);
+      ctx.lineTo(c + Math.cos(a) * R * 0.44, c + Math.sin(a) * R * 0.44);
       ctx.strokeStyle = grad;
       ctx.lineWidth = Math.max(2, R * 0.008);
       ctx.stroke();
     }
 
     // hub rings + monogram
-    this.ring(c, R * 0.2, R * 0.17, { inner: "#f0d98a", outer: "#a9832b" }, 0, TAU);
-    this.ring(c, R * 0.16, R * 0.13, { inner: "#3b2f12", outer: "#17130a" }, 0, TAU);
+    this.ring(c, R * 0.17, R * 0.145, { inner: "#f0d98a", outer: "#a9832b" }, 0, TAU);
+    this.ring(c, R * 0.135, R * 0.11, { inner: "#3b2f12", outer: "#17130a" }, 0, TAU);
     ctx.fillStyle = "#e8cf86";
-    ctx.font = `700 ${Math.max(10, R * 0.045)}px "Segoe UI", system-ui, sans-serif`;
+    ctx.font = `700 ${Math.max(9, R * 0.04)}px "Segoe UI", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("PR", c, c + 1);
@@ -304,10 +304,10 @@ export class Wheel {
     let ballA: number;
     if (this.spin) {
       const t = Math.min((performance.now() - this.spin.startTime) / this.spin.duration, 1);
-      ballR = R * (0.93 - 0.33 * this.easeOutCubic(t));
+      ballR = R * (0.92 - 0.255 * this.easeOutCubic(t));
       ballA = this.ballAngle;
     } else {
-      ballR = R * 0.695;
+      ballR = R * 0.665;
       ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT : Math.PI);
     }
 
