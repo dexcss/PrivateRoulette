@@ -181,10 +181,29 @@ export class TableRoom extends DurableObject<Env> {
     if (url.pathname === "/ws") {
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1]);
+      try { pair[1].serializeAttachment({ role: "spectator", playerId: null }); } catch { }
       this.conns.set(pair[1], { ws: pair[1], role: "spectator", playerId: null, quit: false, lastChatTs: 0 });
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     return new Response("not found", { status: 404 });
+  }
+
+  /** Hibernation wipes in-memory state; rebuild a connection from its attachment. */
+  private connFor(ws: WebSocket): Conn {
+    let conn = this.conns.get(ws);
+    if (!conn) {
+      let att: any = null;
+      try { att = ws.deserializeAttachment(); } catch { att = null; }
+      conn = {
+        ws,
+        role: att?.role === "dealer" ? "dealer" : att?.role === "player" ? "player" : "spectator",
+        playerId: typeof att?.playerId === "string" ? att.playerId : null,
+        quit: false,
+        lastChatTs: 0,
+      };
+      this.conns.set(ws, conn);
+    }
+    return conn;
   }
 
   private send(ws: WebSocket, t: string, d: unknown): void {
@@ -196,7 +215,8 @@ export class TableRoom extends DurableObject<Env> {
   }
 
   private broadcast(t: string, d: unknown, includeDealer = true): void {
-    for (const [ws, conn] of this.conns) {
+    for (const ws of this.ctx.getWebSockets()) {
+      const conn = this.connFor(ws);
       if (conn.quit) continue;
       if (!includeDealer && conn.role === "dealer") continue;
       this.send(ws, t, d);
@@ -204,7 +224,8 @@ export class TableRoom extends DurableObject<Env> {
   }
 
   private broadcastDealerOnly(t: string, d: unknown): void {
-    for (const [ws, conn] of this.conns) {
+    for (const ws of this.ctx.getWebSockets()) {
+      const conn = this.connFor(ws);
       if (conn.role === "dealer" && !conn.quit) this.send(ws, t, d);
     }
   }
@@ -299,7 +320,7 @@ export class TableRoom extends DurableObject<Env> {
   // ---------- message handling ----------
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
-    const conn = this.conns.get(ws);
+    const conn = this.connFor(ws);
     if (!conn || conn.quit) return;
 
     let env: { t?: string; d?: any };
@@ -399,6 +420,7 @@ export class TableRoom extends DurableObject<Env> {
         return;
       }
       conn.role = "dealer";
+      try { ws.serializeAttachment({ role: "dealer", playerId: null }); } catch { }
       this.send(ws, "hello_ok", { role: "dealer" });
       this.send(ws, "games_list", { games: await this.listGameSummaries() });
       return;
@@ -424,6 +446,7 @@ export class TableRoom extends DurableObject<Env> {
       }
       conn.role = "player";
       conn.playerId = player.id;
+      try { ws.serializeAttachment({ role: "player", playerId: player.id }); } catch { }
       this.send(ws, "hello_ok", { role: "player", player_id: player.id, display_name: player.display_name, balance: player.balance });
       this.snapshotFor(conn);
       this.broadcast("player_joined", { player_id: player.id });
@@ -739,8 +762,8 @@ export class TableRoom extends DurableObject<Env> {
     const g = this.state!;
     g.game_status = "deleted";
     await this.save();
-    for (const [w, c] of this.conns) {
-      if (c.role !== "dealer") this.send(w, "game_closed", { game_id: g.game_id });
+    for (const w of this.ctx.getWebSockets()) {
+      if (this.connFor(w).role !== "dealer") this.send(w, "game_closed", { game_id: g.game_id });
     }
     this.state = null;
     this.send(ws, "games_list", { games: await this.listGameSummaries() });
