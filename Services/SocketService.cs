@@ -37,6 +37,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     private DateTimeOffset lastAttempt = DateTimeOffset.MinValue;
     private DateTimeOffset lastServerActivity = DateTimeOffset.UtcNow;
     private DateTimeOffset pingSentAt = DateTimeOffset.MinValue;
+    private DateTimeOffset lastHeartbeatLog = DateTimeOffset.MinValue;
     private Func<object>? helloProvider;
 
     /// <summary>Marshals socket-thread work to the framework thread. Set by the plugin.</summary>
@@ -95,17 +96,27 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
         var silent = (now - this.lastServerActivity).TotalSeconds;
 
-        // ping after 12s of silence; drop the connection if nothing answers by 25s
-        if (silent > 25)
+        // periodic heartbeat trace (verbose log only) so failures are diagnosable
+        if (this.config.VerboseWireLog && (now - this.lastHeartbeatLog).TotalSeconds > 10)
+        {
+            this.lastHeartbeatLog = now;
+            this.log.Debug($"[hb] rx={silent:0}s state={this.ws?.State} pingAge={(now - this.pingSentAt).TotalSeconds:0}s");
+        }
+
+        // keep the connection warm: ping after 5s of silence, drop if nothing
+        // answers by 20s (hibernating edges and proxies kill idle sockets)
+        if (silent > 20)
         {
             this.log.Warning($"backend silent for {silent:0}s — reconnecting");
             this.DropConnection("watchdog: backend silent");
             return;
         }
 
-        if (silent > 12 && (now - this.pingSentAt).TotalSeconds > 10)
+        if (silent > 5 && (now - this.pingSentAt).TotalSeconds > 4)
         {
             this.pingSentAt = now;
+            if (this.config.VerboseWireLog)
+                this.log.Debug("[wire] → ping (heartbeat)");
             _ = this.SendRawAsync("{\"t\":\"ping\",\"d\":{}}");
         }
     }

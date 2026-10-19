@@ -285,13 +285,10 @@ public sealed class MainWindow : Window
     {
         var state = this.session.State;
         if (state == null)
-        {
-            ImGui.TextUnformatted("Waiting for table state…");
-            return;
-        }
+            ImGui.TextDisabled("waiting for table state…");
 
-        SectionText($"Players ({state.Players.Count})");
-        if (ImGui.BeginTable("players", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY))
+        SectionText(state != null ? $"Players ({state.Players.Count})" : "Players");
+        if (state != null && ImGui.BeginTable("players", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY))
         {
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Balance", ImGuiTableColumnFlags.WidthFixed, 90);

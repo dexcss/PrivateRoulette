@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- Dalamud.NET.Sdk defaults: net10.0-windows, x64, LangVersion 14, Nullable on -->
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
     <RootNamespace>PrivateRoulette</RootNamespace>
     <AssemblyName>PrivateRoulette</AssemblyName>
 

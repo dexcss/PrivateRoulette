@@ -110,7 +110,11 @@ public sealed class RouletteSession : IDisposable
         this.Authenticated = true;
         this.AuthMessage = "";
         this.log.Info("authenticated with backend");
-        _ = this.socket.ListGamesAsync();
+        // re-sync the current table if we had one, otherwise refresh the lobby
+        if (this.GameId != null)
+            _ = this.socket.JoinGameAsync(this.GameId);
+        else
+            _ = this.socket.ListGamesAsync();
         this.Changed?.Invoke();
     }
 
@@ -134,12 +138,10 @@ public sealed class RouletteSession : IDisposable
 
     private void Reset()
     {
+        // Keep the current table selected across reconnects: the UI stays put and
+        // we re-sync with join_game once the socket is back.
         this.Authenticated = false;
-        this.AuthMessage = "disconnected";
-        this.GameId = null;
-        this.State = null;
-        this.PendingSpin = null;
-        this.AwaitingDice = false;
+        this.AuthMessage = "disconnected — reconnecting…";
         this.Changed?.Invoke();
     }
 
