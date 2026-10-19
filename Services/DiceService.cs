@@ -132,10 +132,9 @@ public sealed partial class DiceService : IDisposable
 
     private void OnChatMessage(IHandleableChatMessage message)
     {
-        // only system-ish messages can be rolls
-        if (message.LogKind is not (XivChatType.SystemMessage or XivChatType.SystemError or XivChatType.Echo))
-            return;
-
+        // The dice result line can arrive as SystemMessage/Echo depending on
+        // client language and settings; the regexes are specific enough that
+        // we can safely test every chat line.
         var text = message.Message.TextValue;
         var roll = ParseDiceRoll(text);
         if (roll == null)
