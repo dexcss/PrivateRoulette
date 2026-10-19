@@ -1,43 +1,53 @@
-// Procedural European roulette wheel with a physically-flavoured spin.
-// No image assets: everything is drawn with canvas 2D. We own this art.
+// Premium American double-zero roulette wheel — procedural canvas rendering.
+// 38 pockets (0, 00, 1..36); "00" is encoded as 37 and displayed as "00".
+// Everything here is drawn by us: layered gradients, gold inlay, ball shadow
+// and trail, rim sheen, and a physically-flavoured spin.
 
 const ORDER = [
-  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
-  5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
+  0, 28, 9, 26, 30, 11, 7, 20, 32, 17, 5, 22, 34, 15, 3, 24, 36, 13, 1,
+  37, 27, 10, 25, 29, 12, 8, 19, 31, 18, 6, 21, 33, 16, 4, 23, 35, 14, 2,
 ];
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
-function colorOf(n: number): string {
-  if (n === 0) return "#0f9d58";
-  return RED.has(n) ? "#c0392b" : "#1b1b1f";
+const TAU = Math.PI * 2;
+const SLOT = TAU / 38;
+
+function labelOf(n: number): string {
+  return n === 37 ? "00" : String(n);
 }
 
-const TAU = Math.PI * 2;
-const POCKET = TAU / 37;
+function pocketColor(n: number): { top: string; bottom: string; ring: string } {
+  if (n === 0 || n === 37) return { top: "#1aa05e", bottom: "#0a5c33", ring: "#0f7a44" };
+  if (RED.has(n)) return { top: "#d24b3c", bottom: "#8e2f24", ring: "#a83a2e" };
+  return { top: "#2a2d35", bottom: "#14161b", ring: "#1c1f26" };
+}
 
 interface SpinState {
   startTime: number;
-  duration: number;         // ms
+  duration: number;
   wheelFrom: number;
-  wheelTo: number;          // radians (mod TAU irrelevant; absolute)
+  wheelTo: number;
   ballFrom: number;
-  ballTo: number;           // final ball angle = wheelTo + pocket angle
+  ballTo: number;
   result: number;
-  bouncing: boolean;
 }
 
 export class Wheel {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
-  private wheelAngle = 0;         // absolute rotation of the wheel
-  private idleSpeed = (TAU / 60) * 0.25; // rad/s idle drift
+  private wheelAngle = 0;
+  private idleSpeed = (TAU / 60) * 0.18;
   private spin: SpinState | null = null;
   private lastFrame = 0;
   private onSettle?: (result: number) => void;
   private onTick?: () => void;
   private lastTickPocket = -1;
+  private ballAngle = 0;
+  private lastResult = -1;
+  private settleTime = 0;
+  private trail: { x: number; y: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -49,7 +59,7 @@ export class Wheel {
       const dt = Math.min((t - this.lastFrame) / 1000, 0.05);
       this.lastFrame = t;
       this.update(dt);
-      this.draw();
+      this.draw(t / 1000);
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -67,9 +77,13 @@ export class Wheel {
     cancelAnimationFrame(this.raf);
   }
 
+  get isSpinning(): boolean {
+    return this.spin !== null;
+  }
+
   private resize() {
     const parent = this.canvas.parentElement!;
-    const size = Math.max(260, Math.min(parent.clientWidth, 560));
+    const size = Math.max(280, Math.min(parent.clientWidth, 620));
     const dpr = window.devicePixelRatio || 1;
     this.canvas.style.width = `${size}px`;
     this.canvas.style.height = `${size}px`;
@@ -78,22 +92,19 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  /** Kick off a spin animation that settles on `result`. */
-  spinTo(result: number, durationMs = 6500): void {
-    if (this.spin) return; // already spinning
+  spinTo(result: number, durationMs = 6800): void {
+    if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
-    const pocketAngle = pocketIndex * POCKET; // angle of the winning pocket in wheel-local space
+    const pocketAngle = pocketIndex * SLOT;
 
     const wheelFrom = this.wheelAngle;
-    const wheelTurns = 3 + Math.random() * 1.5;
-    const wheelTo = wheelFrom + wheelTurns * TAU;
+    const wheelTo = wheelFrom + (3 + Math.random() * 1.4) * TAU;
 
-    const ballFrom = this.wheelAngle + Math.PI; // start opposite-ish
+    const ballFrom = this.wheelAngle + Math.PI;
     const ballTurns = 6 + Math.random() * 2;
-    // final ball ABSOLUTE angle such that (ball - wheelTo) ≡ pocketAngle (mod TAU)
-    const rawBallTo = wheelTo + pocketAngle;
-    const ballTo = rawBallTo + ballTurns * TAU;
+    const ballTo = wheelTo + pocketAngle + ballTurns * TAU;
 
+    this.trail = [];
     this.spin = {
       startTime: performance.now(),
       duration: durationMs,
@@ -102,7 +113,6 @@ export class Wheel {
       ballFrom,
       ballTo,
       result,
-      bouncing: false,
     };
   }
 
@@ -118,19 +128,16 @@ export class Wheel {
     const s = this.spin;
     const t = (performance.now() - s.startTime) / s.duration;
     if (t >= 1) {
-      // settle exactly: wheel at wheelTo, ball in the winning pocket
       this.wheelAngle = s.wheelTo;
       this.ballAngle = s.ballFrom + (s.ballTo - s.ballFrom);
       this.lastResult = s.result;
+      this.settleTime = performance.now();
       this.spin = null;
       this.onSettle?.(s.result);
       return;
     }
-    // wheel: strong ease-out
     this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.easeOutCubic(Math.min(t, 1));
 
-    // ball: travels further and decelerates slightly later, with a small
-    // damped bounce in the final 15% so it feels like it drops into a pocket
     let b: number;
     if (t < 0.85) {
       const bt = t / 0.85;
@@ -138,144 +145,278 @@ export class Wheel {
     } else {
       const base = s.ballFrom + (s.ballTo - s.ballFrom);
       const phase = (t - 0.85) / 0.15;
-      const wobble = Math.sin(phase * Math.PI * 3) * POCKET * 0.9 * (1 - phase);
+      const wobble = Math.sin(phase * Math.PI * 3) * SLOT * 0.85 * (1 - phase);
       b = base + wobble;
     }
     this.ballAngle = b;
 
-    // pocket-crossing ticks (rate follows the ball naturally)
-    const pocket = Math.floor(((b - this.wheelAngle) % TAU + TAU) % TAU / POCKET);
+    const pocket = Math.floor((((b - this.wheelAngle) % TAU) + TAU) % TAU / SLOT);
     if (pocket !== this.lastTickPocket) {
       this.lastTickPocket = pocket;
       this.onTick?.();
     }
   }
 
-  private ballAngle = 0;
-
-  private draw(): void {
+  private draw(now: number): void {
     const ctx = this.ctx;
     const size = parseFloat(this.canvas.style.width);
     const c = size / 2;
-    const R = c - 4;
+    const R = c - 6;
 
     ctx.clearRect(0, 0, size, size);
 
-    // outer wooden rim
-    const rim = ctx.createRadialGradient(c, c, R * 0.82, c, c, R);
-    rim.addColorStop(0, "#5a3a22");
-    rim.addColorStop(0.75, "#7a4f2d");
-    rim.addColorStop(1, "#3c2517");
+    // ambient halo
+    const halo = ctx.createRadialGradient(c, c, R * 0.6, c, c, R * 1.05);
+    halo.addColorStop(0, "rgba(201,162,39,0.0)");
+    halo.addColorStop(0.8, "rgba(201,162,39,0.10)");
+    halo.addColorStop(1, "rgba(201,162,39,0)");
+    ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(c, c, R, 0, TAU);
-    ctx.fillStyle = rim;
+    ctx.arc(c, c, R * 1.03, 0, TAU);
     ctx.fill();
 
-    // pocket ring
-    const pocketR = R * 0.78;
-    for (let i = 0; i < 37; i++) {
+    // drop shadow
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(c, c + R * 0.06, R * 0.99, R * 0.96, 0, 0, TAU);
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.filter = "blur(14px)";
+    ctx.fill();
+    ctx.restore();
+
+    // ---- outer rim: layered wood + gold inlay ----
+    this.ring(c, R, R * 0.985, { inner: "#4a2f1b", outer: "#24160c" }, 0.0, TAU);
+    this.ring(c, R * 0.972, R * 0.94, { inner: "#7a4f2d", outer: "#50331c" }, 0.0, TAU);
+
+    // polished gold inlay with a slow rotating sheen
+    const sheenAngle = now * 0.35;
+    const goldGrad = ctx.createConicGradient ? ctx.createConicGradient(sheenAngle, c, c) : null;
+    ctx.beginPath();
+    ctx.arc(c, c, R * 0.935, 0, TAU);
+    ctx.arc(c, c, R * 0.905, 0, TAU, true);
+    if (goldGrad) {
+      goldGrad.addColorStop(0, "#8b6a1f");
+      goldGrad.addColorStop(0.12, "#e8cf86");
+      goldGrad.addColorStop(0.25, "#a9832b");
+      goldGrad.addColorStop(0.5, "#f2e3ac");
+      goldGrad.addColorStop(0.62, "#9a7724");
+      goldGrad.addColorStop(0.82, "#e5c979");
+      goldGrad.addColorStop(1, "#8b6a1f");
+      ctx.fillStyle = goldGrad;
+    } else {
+      ctx.fillStyle = "#c9a227";
+    }
+    ctx.fill("evenodd");
+
+    // inner rim shadow
+    this.ring(c, R * 0.905, R * 0.885, { inner: "rgba(0,0,0,0.65)", outer: "rgba(0,0,0,0.25)" }, 0, TAU);
+
+    // ---- pocket ring ----
+    const pocketOuter = R * 0.885;
+    const pocketInner = R * 0.6;
+    for (let i = 0; i < 38; i++) {
       const n = ORDER[i];
-      const a0 = this.wheelAngle + i * POCKET - POCKET / 2 - Math.PI / 2;
+      const a0 = this.wheelAngle + i * SLOT - SLOT / 2 - Math.PI / 2;
+      const a1 = a0 + SLOT;
+      const col = pocketColor(n);
+
+      // wedge with radial well gradient
+      const g = ctx.createRadialGradient(c, c, pocketInner, c, c, pocketOuter);
+      g.addColorStop(0, col.top);
+      g.addColorStop(1, col.bottom);
       ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a0) * R * 0.55, c + Math.sin(a0) * R * 0.55);
-      ctx.arc(c, c, pocketR, a0, a0 + POCKET);
+      ctx.arc(c, c, pocketOuter, a0, a1);
+      ctx.arc(c, c, pocketInner, a1, a0, true);
       ctx.closePath();
-      ctx.fillStyle = colorOf(n);
+      ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = "rgba(218,179,113,0.55)";
-      ctx.lineWidth = 1;
+
+      // inner edge shading (depth)
+      ctx.beginPath();
+      ctx.arc(c, c, pocketOuter, a0, a1);
+      ctx.arc(c, c, pocketOuter - R * 0.018, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.fill();
+
+      // gold separators
+      ctx.beginPath();
+      ctx.moveTo(c + Math.cos(a0) * pocketInner, c + Math.sin(a0) * pocketInner);
+      ctx.lineTo(c + Math.cos(a0) * pocketOuter, c + Math.sin(a0) * pocketOuter);
+      ctx.strokeStyle = "rgba(232,207,134,0.55)";
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      // number label
-      const am = a0 + POCKET / 2;
-      const tx = c + Math.cos(am) * (pocketR - R * 0.06);
-      const ty = c + Math.sin(am) * (pocketR - R * 0.06);
+      // number plate
+      const am = a0 + SLOT / 2;
+      const tr = pocketOuter - R * 0.055;
       ctx.save();
-      ctx.translate(tx, ty);
+      ctx.translate(c + Math.cos(am) * tr, c + Math.sin(am) * tr);
       ctx.rotate(am + Math.PI / 2);
-      ctx.fillStyle = "#f5f0e6";
-      ctx.font = `600 ${Math.max(9, R * 0.052)}px system-ui, sans-serif`;
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.font = `700 ${Math.max(9, R * 0.05)}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(n), 0, 0);
+      ctx.fillText(labelOf(n), 0.6, 0.8);
+      ctx.fillStyle = "#f6efdd";
+      ctx.fillText(labelOf(n), 0, 0);
       ctx.restore();
-
-      // separators
-      ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a0) * R * 0.55, c + Math.sin(a0) * R * 0.55);
-      ctx.lineTo(c + Math.cos(a0) * pocketR, c + Math.sin(a0) * pocketR);
-      ctx.strokeStyle = "rgba(218,179,113,0.5)";
-      ctx.stroke();
     }
 
-    // inner cone
-    const cone = ctx.createRadialGradient(c, c, 0, c, c, R * 0.55);
-    cone.addColorStop(0, "#2a2a30");
-    cone.addColorStop(1, "#101014");
+    // ---- inner cone / hub ----
+    const cone = ctx.createRadialGradient(c - R * 0.18, c - R * 0.22, R * 0.02, c, c, pocketInner);
+    cone.addColorStop(0, "#2f333c");
+    cone.addColorStop(0.55, "#171a20");
+    cone.addColorStop(1, "#0a0c10");
     ctx.beginPath();
-    ctx.arc(c, c, R * 0.55, 0, TAU);
+    ctx.arc(c, c, pocketInner, 0, TAU);
     ctx.fillStyle = cone;
     ctx.fill();
 
-    // decorative spokes
+    // spokes
     for (let i = 0; i < 8; i++) {
       const a = this.wheelAngle + (i * TAU) / 8;
+      const grad = ctx.createLinearGradient(
+        c + Math.cos(a) * R * 0.12, c + Math.sin(a) * R * 0.12,
+        c + Math.cos(a) * R * 0.56, c + Math.sin(a) * R * 0.56,
+      );
+      grad.addColorStop(0, "rgba(232,207,134,0.55)");
+      grad.addColorStop(1, "rgba(232,207,134,0.08)");
       ctx.beginPath();
-      ctx.moveTo(c + Math.cos(a) * R * 0.08, c + Math.sin(a) * R * 0.08);
-      ctx.lineTo(c + Math.cos(a) * R * 0.5, c + Math.sin(a) * R * 0.5);
-      ctx.strokeStyle = "rgba(218,179,113,0.35)";
-      ctx.lineWidth = 2;
+      ctx.moveTo(c + Math.cos(a) * R * 0.11, c + Math.sin(a) * R * 0.11);
+      ctx.lineTo(c + Math.cos(a) * R * 0.56, c + Math.sin(a) * R * 0.56);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(2, R * 0.008);
       ctx.stroke();
     }
 
-    // hub
+    // hub rings + monogram
+    this.ring(c, R * 0.2, R * 0.17, { inner: "#f0d98a", outer: "#a9832b" }, 0, TAU);
+    this.ring(c, R * 0.16, R * 0.13, { inner: "#3b2f12", outer: "#17130a" }, 0, TAU);
+    ctx.fillStyle = "#e8cf86";
+    ctx.font = `700 ${Math.max(10, R * 0.045)}px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("PR", c, c + 1);
+
+    // ---- ball ----
+    let ballR: number;
+    let ballA: number;
+    if (this.spin) {
+      const t = Math.min((performance.now() - this.spin.startTime) / this.spin.duration, 1);
+      ballR = R * (0.93 - 0.33 * this.easeOutCubic(t));
+      ballA = this.ballAngle;
+    } else {
+      ballR = R * 0.695;
+      ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT : Math.PI);
+    }
+
+    const bx = c + Math.cos(ballA) * ballR;
+    const by = c + Math.sin(ballA) * ballR;
+    const br = Math.max(4.5, R * 0.027);
+
+    // trail while spinning fast
+    if (this.spin) {
+      this.trail.push({ x: bx, y: by });
+      if (this.trail.length > 7) this.trail.shift();
+      for (let i = 0; i < this.trail.length; i++) {
+        const p = this.trail[i];
+        const a = (i / this.trail.length) * 0.22;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, br * (0.6 + 0.4 * (i / this.trail.length)), 0, TAU);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fill();
+      }
+    } else {
+      this.trail = [];
+    }
+
+    // ball shadow
     ctx.beginPath();
-    ctx.arc(c, c, R * 0.1, 0, TAU);
-    ctx.fillStyle = "#c9a227";
+    ctx.ellipse(bx + br * 0.25, by + br * 0.35, br * 0.95, br * 0.7, 0, 0, TAU);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fill();
 
-    // ball
-    let ballR = R * 0.62;
-    let ballA = this.ballAngle;
-    if (!this.spin) {
-      // resting ball sits in the last pocket (or opposite if none yet)
-      ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * POCKET : Math.PI);
-    } else {
-      // ball starts high on the rim and spirals down as it slows
-      const s = this.spin;
-      const t = Math.min((performance.now() - s.startTime) / s.duration, 1);
-      ballR = R * (0.9 - 0.28 * this.easeOutCubic(t));
-    }
-    if (this.lastResult >= 0) {
-      const bx = c + Math.cos(ballA) * ballR;
-      const by = c + Math.sin(ballA) * ballR;
+    // ball body
+    const ballGrad = ctx.createRadialGradient(bx - br * 0.35, by - br * 0.4, br * 0.15, bx, by, br);
+    ballGrad.addColorStop(0, "#ffffff");
+    ballGrad.addColorStop(0.55, "#f2f2f2");
+    ballGrad.addColorStop(1, "#b9bdc4");
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, TAU);
+    ctx.fillStyle = ballGrad;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // specular
+    ctx.beginPath();
+    ctx.arc(bx - br * 0.33, by - br * 0.38, br * 0.22, 0, TAU);
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.fill();
+
+    // ---- winning pocket pulse after settle ----
+    if (!this.spin && this.lastResult >= 0 && performance.now() - this.settleTime < 2600) {
+      const idx = ORDER.indexOf(this.lastResult);
+      const a0 = this.wheelAngle + idx * SLOT - SLOT / 2 - Math.PI / 2;
+      const pulse = 1 + 0.08 * Math.sin((performance.now() - this.settleTime) / 120);
       ctx.beginPath();
-      ctx.arc(bx, by, Math.max(4, R * 0.028), 0, TAU);
-      ctx.fillStyle = "#f8f8f8";
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur = 6;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.arc(c, c, pocketOuter * pulse, a0, a0 + SLOT);
+      ctx.arc(c, c, pocketInner, a0 + SLOT, a0, true);
+      ctx.closePath();
+      ctx.strokeStyle = `rgba(255,235,170,${0.85 * (1 - (performance.now() - this.settleTime) / 2600)})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
 
-    // result badge
-    if (this.lastResult >= 0 && !this.spin) {
-      ctx.beginPath();
-      ctx.arc(c, c, R * 0.19, 0, TAU);
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
+    // ---- result plate ----
+    if (!this.spin && this.lastResult >= 0) {
+      const plateW = R * 0.34;
+      const plateH = R * 0.17;
+      const px = c - plateW / 2;
+      const py = c + R * 0.28;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = "rgba(10,12,16,0.85)";
+      this.roundRect(px, py, plateW, plateH, plateH / 2);
       ctx.fill();
-      ctx.fillStyle = colorOf(this.lastResult);
-      ctx.font = `700 ${R * 0.16}px system-ui, sans-serif`;
+      ctx.restore();
+      const col = this.lastResult === 0 || this.lastResult === 37 ? "#2ecc71" : RED.has(this.lastResult) ? "#e74c3c" : "#cfd4dc";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      this.roundRect(px, py, plateW, plateH, plateH / 2);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.font = `800 ${plateH * 0.62}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(this.lastResult), c, c + 1);
+      ctx.fillText(labelOf(this.lastResult), c, py + plateH / 2 + 1);
     }
   }
 
-  private lastResult = -1;
+  private ring(c: number, rOuter: number, rInner: number, colors: { inner: string; outer: string }, a0: number, a1: number): void {
+    const ctx = this.ctx;
+    const g = ctx.createRadialGradient(c, c, rInner, c, c, rOuter);
+    g.addColorStop(0, colors.inner);
+    g.addColorStop(1, colors.outer);
+    ctx.beginPath();
+    ctx.arc(c, c, rOuter, a0, a1);
+    ctx.arc(c, c, rInner, a1, a0, true);
+    ctx.closePath();
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
 
-  /** Public getter used by UI to know if a spin animation is running. */
-  get isSpinning(): boolean {
-    return this.spin !== null;
+  private roundRect(x: number, y: number, w: number, h: number, r: number): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   }
 }

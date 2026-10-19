@@ -1,4 +1,4 @@
-import { Api, colorOf, GameStateMsg, HistoryEntry, MeState, PublicBetsMsg, PublicPlayer, Role } from "./protocol";
+import { Api, colorOf, displayNumber, GameStateMsg, HistoryEntry, MeState, PublicBetsMsg, PublicPlayer, Role } from "./protocol";
 import { Wheel } from "./wheel";
 import { Sfx } from "./audio";
 import { Board } from "./board";
@@ -301,7 +301,7 @@ function renderHistory() {
   historyStrip.innerHTML = lastHistory
     .slice(-14)
     .reverse()
-    .map((h) => `<span class="hist ${h.color}">${h.result}</span>`)
+    .map((h) => `<span class="hist ${h.color}">${displayNumber(h.result)}</span>`)
     .join("");
 }
 
@@ -331,7 +331,7 @@ function renderProof(spin: any) {
     proofLine.textContent = spin?.proof?.hash === "manual" ? "manual spin (dealer's choice)" : "";
     return;
   }
-  proofLine.textContent = `proof: dice ${spin.proof.dice_roll} · sha256("${spin.proof.dice_roll}:${spin.proof.control_number}")[0..8] = ${spin.proof.seed} → ${spin.proof.seed} % 37 = ${spin.result} ✓`;
+  proofLine.textContent = `proof: dice ${spin.proof.dice_roll} · sha256("${spin.proof.dice_roll}:${spin.proof.control_number}")[0..8] = ${spin.proof.seed} → ${spin.proof.seed} % 38 = ${displayNumber(spin.result)} ✓`;
 }
 
 function addChatLine(m: any) {
@@ -428,7 +428,7 @@ function renderStats(): void {
     if (h.color === "red") red++;
     else if (h.color === "black") black++;
     else green++;
-    if (h.result !== 0) {
+    if (h.result !== 0 && h.result !== 37) {
       if (h.result % 2 === 1) odd++; else even++;
     }
     counts.set(h.result, (counts.get(h.result) ?? 0) + 1);

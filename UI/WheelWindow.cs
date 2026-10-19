@@ -19,7 +19,7 @@ namespace PrivateRoulette.UI;
 public sealed class WheelWindow : Window
 {
     private const float Tau = MathF.PI * 2f;
-    private const float Pocket = Tau / 37f;
+    private const float Pocket = Tau / 38f;
 
     private readonly PluginConfig config;
     private readonly RouletteSession session;
@@ -173,7 +173,7 @@ public sealed class WheelWindow : Window
             // number
             var mid = a0 + Pocket / 2;
             var tp = center + Dir(mid) * (pocketR - r * 0.065f);
-            var text = n.ToString();
+            var text = Wheel.Display(n);
             var textSize = ImGui.CalcTextSize(text);
             draw.AddText(tp - textSize / 2, U32(0xF5F0E6), text);
         }
@@ -206,7 +206,7 @@ public sealed class WheelWindow : Window
                 "black" => 0x9AA0AA,
                 _ => 0x2ECC71,
             };
-            var label = this.lastResult.ToString();
+            var label = Wheel.Display(this.lastResult);
             var textSize = ImGui.CalcTextSize(label) * 3.4f;
             draw.AddCircleFilled(center, r * 0.19f, U32(0x000000, 0.55f), 48);
             draw.AddText(center - textSize / 2, U32(color, 1f), label);
@@ -235,7 +235,7 @@ public sealed class WheelWindow : Window
                 "black" => new Vector4(0.78f, 0.80f, 0.84f, 1f),
                 _ => new Vector4(0.18f, 0.80f, 0.44f, 1f),
             };
-            ImGui.TextColored(col, $"last result: {this.lastResult} {this.lastColor.ToUpperInvariant()}");
+            ImGui.TextColored(col, $"last result: {Wheel.Display(this.lastResult)} {this.lastColor.ToUpperInvariant()}");
             var spin = this.session.LastSpin;
             if (spin?.Proof != null && spin.Proof.Hash != "manual")
             {

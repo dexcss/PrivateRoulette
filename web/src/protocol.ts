@@ -81,9 +81,15 @@ export interface MeState {
 
 export const RED_NUMS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
+export const DOUBLE_ZERO = 37;
+
 export function colorOf(n: number): "red" | "black" | "green" {
-  if (n === 0) return "green";
+  if (n === 0 || n === DOUBLE_ZERO) return "green";
   return RED_NUMS.has(n) ? "red" : "black";
+}
+
+export function displayNumber(n: number): string {
+  return n === DOUBLE_ZERO ? "00" : String(n);
 }
 
 export const PAYOUTS: Record<string, number> = {

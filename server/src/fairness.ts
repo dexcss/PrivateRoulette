@@ -1,18 +1,26 @@
-// Private Roulette — provable fairness.
-// result = uint32_be(sha256(`${dice_roll}:${control_number}`)[0..8]) % 37
-// Verified against a live SimpleRoulette capture (see PROTOCOL.md) and kept
-// identical so existing player expectations of the formula carry over.
+// Private Roulette — provable fairness (American double-zero wheel).
+// 38 pockets: 0, 00, 1..36. "00" is encoded as the number 37 internally and
+// displayed as "00".
+// result = uint32_be(sha256(`${dice_roll}:${control_number}`)[0..8]) % 38
+
+export const POCKET_COUNT = 38;
+export const DOUBLE_ZERO = 37;
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
+/** American wheel order (clockwise from 0, 00 opposite). 37 = 00. */
 export const WHEEL_ORDER = [
-  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
-  5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
+  0, 28, 9, 26, 30, 11, 7, 20, 32, 17, 5, 22, 34, 15, 3, 24, 36, 13, 1,
+  37, 27, 10, 25, 29, 12, 8, 19, 31, 18, 6, 21, 33, 16, 4, 23, 35, 14, 2,
 ];
 
 export function colorOf(n: number): "red" | "black" | "green" {
-  if (n === 0) return "green";
+  if (n === 0 || n === DOUBLE_ZERO) return "green";
   return RED.has(n) ? "red" : "black";
+}
+
+export function displayNumber(n: number): string {
+  return n === DOUBLE_ZERO ? "00" : String(n);
 }
 
 export async function sha256Hex(input: string): Promise<string> {
@@ -39,7 +47,7 @@ export async function computeResult(diceRoll: number | null, controlNumber: stri
   if (diceRoll === null || diceRoll === undefined) throw new Error("missing dice roll");
   const full = await sha256Hex(`${diceRoll}:${controlNumber}`);
   const seed = parseInt(full.slice(0, 8), 16) >>> 0;
-  const result = seed % 37;
+  const result = seed % POCKET_COUNT;
   return { result, proof: { dice_roll: diceRoll, control_number: controlNumber, hash: full.slice(0, 16), seed, result } };
 }
 
@@ -54,15 +62,19 @@ export function cryptoInt(min: number, max: number): number {
   return min + (crypto.getRandomValues(new Uint32Array(1))[0] % range);
 }
 
-// ---- bet semantics (identical to the documented table) ----
+// ---- bet semantics (American table: both zeros are green; outside bets lose on either) ----
+
+function isZero(n: number): boolean {
+  return n === 0 || n === DOUBLE_ZERO;
+}
 
 function dozenOf(n: number): number | null {
-  if (n === 0) return null;
+  if (isZero(n)) return null;
   return Math.floor((n - 1) / 12) + 1;
 }
 
 function colOf(n: number): number | null {
-  if (n === 0) return null;
+  if (isZero(n)) return null;
   return n % 3 === 0 ? 3 : n % 3;
 }
 
@@ -74,20 +86,22 @@ export function payoutMultiplierForTarget(target: string, result: number): numbe
     return Number.isFinite(n) && result === n ? 36 : 0;
   }
   switch (t) {
-    case "red": return result === 0 ? 0 : colorOf(result) === "red" ? 2 : 0;
-    case "black": return result === 0 ? 0 : colorOf(result) === "black" ? 2 : 0;
-    case "odd": return result === 0 ? 0 : result % 2 === 1 ? 2 : 0;
-    case "even": return result === 0 ? 0 : result % 2 === 0 ? 2 : 0;
-    case "low": return result >= 1 && result <= 18 ? 2 : 0;
-    case "high": return result >= 19 && result <= 36 ? 2 : 0;
+    case "red": return isZero(result) ? 0 : colorOf(result) === "red" ? 2 : 0;
+    case "black": return isZero(result) ? 0 : colorOf(result) === "black" ? 2 : 0;
+    case "odd": return isZero(result) ? 0 : result % 2 === 1 ? 2 : 0;
+    case "even": return isZero(result) ? 0 : result % 2 === 0 ? 2 : 0;
+    case "low": return !isZero(result) && result <= 18 ? 2 : 0;
+    case "high": return !isZero(result) && result >= 19 ? 2 : 0;
     case "firstfour": return result >= 0 && result <= 3 ? 9 : 0;
+    // top line: 0, 00, 1, 2, 3 pays 6:1 (x7)
+    case "topline": return result === 0 || result === DOUBLE_ZERO || (result >= 1 && result <= 3) ? 7 : 0;
   }
   const list = (prefix: string, count: number): number[] | null => {
     if (!t.startsWith(prefix)) return null;
     const parts = t.slice(prefix.length).split("-");
     if (parts.length !== count) return null;
     const nums = parts.map((p) => parseInt(p, 10));
-    if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 36)) return null;
+    if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > DOUBLE_ZERO)) return null;
     return nums;
   };
   const split = list("split-", 2);
@@ -117,7 +131,8 @@ export function isInsideBet(target: string): boolean {
     t.startsWith("street-") ||
     t.startsWith("corner-") ||
     t.startsWith("sixline-") ||
-    t === "firstfour"
+    t === "firstfour" ||
+    t === "topline"
   );
 }
 
@@ -125,16 +140,16 @@ export function isValidBetTarget(target: string): boolean {
   const t = (target || "").trim().toLowerCase();
   if (t.startsWith("n-")) {
     const n = parseInt(t.slice(2), 10);
-    return Number.isFinite(n) && n >= 0 && n <= 36;
+    return Number.isFinite(n) && n >= 0 && n <= DOUBLE_ZERO;
   }
-  if (["red", "black", "odd", "even", "low", "high", "firstfour"].includes(t)) return true;
+  if (["red", "black", "odd", "even", "low", "high", "firstfour", "topline"].includes(t)) return true;
   const list = (prefix: string, count: number): boolean => {
     if (!t.startsWith(prefix)) return false;
     const parts = t.slice(prefix.length).split("-");
     if (parts.length !== count) return false;
     return parts.every((p) => {
       const n = parseInt(p, 10);
-      return Number.isFinite(n) && n >= 0 && n <= 36;
+      return Number.isFinite(n) && n >= 0 && n <= DOUBLE_ZERO;
     });
   };
   if (list("split-", 2) || list("street-", 3) || list("corner-", 4) || list("sixline-", 6)) return true;

@@ -6,8 +6,9 @@
 
 import { DurableObject } from "cloudflare:workers";
 import {
-  colorOf, computeResult, cryptoInt, cryptoRandomHex,
+  colorOf, computeResult, cryptoInt, cryptoRandomHex, displayNumber,
   isValidBetTarget, isInsideBet, payoutMultiplierForTarget, playerColor,
+  DOUBLE_ZERO,
 } from "./fairness";
 
 export interface Env {
@@ -634,7 +635,7 @@ export class TableRoom extends DurableObject<Env> {
 
     if (g.spin_mode === "manual") {
       forcedNumber = Math.trunc(Number(d.number ?? -1));
-      if (!(forcedNumber >= 0 && forcedNumber <= 36)) return this.err(ws, "manual spin needs number 0-36");
+      if (!(forcedNumber >= 0 && forcedNumber <= DOUBLE_ZERO)) return this.err(ws, "manual spin needs number 0-36 or 37 (00)");
     } else if (g.spin_mode === "control") {
       diceRoll = Math.trunc(Number(d.dice_roll ?? -1));
       if (!(diceRoll >= 0 && diceRoll <= 999)) return this.err(ws, "control spin needs dice_roll 0-999");
@@ -713,11 +714,11 @@ export class TableRoom extends DurableObject<Env> {
 
     const winners = g.players.filter((p) => !p.left_at && p.last_round_net > 0);
     if (winners.length > 0) {
-      this.systemChat(`Number ${result} (${color}) wins! ${winners.map((w) => `${w.display_name} +${w.last_round_net.toLocaleString()}`).join(", ")}`);
+      this.systemChat(`Number ${displayNumber(result)} (${color}) wins! ${winners.map((w) => `${w.display_name} +${w.last_round_net.toLocaleString()}`).join(", ")}`);
     } else if (hasBets) {
-      this.systemChat(`Number ${result} (${color}) wins! House takes the round.`);
+      this.systemChat(`Number ${displayNumber(result)} (${color}) wins! House takes the round.`);
     } else {
-      this.systemChat(`Number ${result} (${color}). No bets this round.`);
+      this.systemChat(`Number ${displayNumber(result)} (${color}). No bets this round.`);
     }
   }
 

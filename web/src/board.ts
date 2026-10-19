@@ -59,19 +59,21 @@ export class Board {
     // grid: col 1 = zero, cols 2..13 = numbers, col 14 = column bets ("2 to 1")
     // rows: 1..3 numbers (top row is 3-6-9...), row 4 = dozens, row 5 = even-money
     this.root.style.display = "grid";
-    this.root.style.gridTemplateColumns = "minmax(34px,0.55fr) repeat(12, 1fr) minmax(38px,0.55fr)";
+    this.root.style.gridTemplateColumns = "minmax(34px,0.55fr) minmax(34px,0.55fr) repeat(12, 1fr) minmax(38px,0.55fr)";
     this.root.style.gridTemplateRows = "repeat(3, 1fr) 0.8fr 0.8fr";
     this.root.style.gap = "3px";
 
-    // zero (spans all 3 number rows) — click = n-0; bottom part = firstfour
+    // zero and double-zero (American) — 00 is encoded as 37 internally
     const zero = this.cell("n-0", "0", colorOf(0), 1, 1, 1, 3);
     zero.addEventListener("contextmenu", (e) => e.preventDefault());
+    const dz = this.cell("n-37", "00", colorOf(37), 2, 1, 1, 3);
+    dz.addEventListener("contextmenu", (e) => e.preventDefault());
 
     // numbers: top row = 3,6,...,36
     for (let row = 1; row <= 3; row++) {
       for (let col = 1; col <= 12; col++) {
         const n = col * 3 - (row - 1);
-        const el = this.cell(`n-${n}`, String(n), colorOf(n), col + 1, row);
+        const el = this.cell(`n-${n}`, String(n), colorOf(n), col + 2, row);
         el.addEventListener("contextmenu", (e) => e.preventDefault());
       }
     }
@@ -79,28 +81,27 @@ export class Board {
     // column bets ("2 to 1") right of each row
     for (let row = 1; row <= 3; row++) {
       const c = row; // top row is column 3
-      const el = this.cell(`col-${4 - row}`, "2:1", "#20242c", 14, row);
+      const el = this.cell(`col-${4 - row}`, "2:1", "#20242c", 15, row);
       el.classList.add("outside");
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
 
     // dozens
-    const dozens = this.cell("dozen-1", "1st 12", "#20242c", 2, 4, 4);
-    this.cell("dozen-2", "2nd 12", "#20242c", 6, 4, 4);
-    this.cell("dozen-3", "3rd 12", "#20242c", 10, 4, 4);
-    dozens.parentElement!.classList.add("has-dozens");
+    this.cell("dozen-1", "1st 12", "#20242c", 3, 4, 4);
+    this.cell("dozen-2", "2nd 12", "#20242c", 7, 4, 4);
+    this.cell("dozen-3", "3rd 12", "#20242c", 11, 4, 4);
 
     // even money
-    this.cell("low", "1-18", "#20242c", 2, 5, 3);
-    this.cell("even", "EVEN", "#20242c", 5, 5, 2);
-    this.cell("red", "RED", "#c0392b", 7, 5, 1);
-    this.cell("black", "BLACK", "#1b1b1f", 8, 5, 1);
-    this.cell("odd", "ODD", "#20242c", 9, 5, 2);
-    this.cell("high", "19-36", "#20242c", 11, 5, 3);
+    this.cell("low", "1-18", "#20242c", 3, 5, 3);
+    this.cell("even", "EVEN", "#20242c", 6, 5, 2);
+    this.cell("red", "RED", "#c0392b", 8, 5, 1);
+    this.cell("black", "BLACK", "#1b1b1f", 9, 5, 1);
+    this.cell("odd", "ODD", "#20242c", 10, 5, 2);
+    this.cell("high", "19-36", "#20242c", 12, 5, 3);
 
-    // first-four zone under zero
-    const ff = this.cell("firstfour", "0-1-2-3", "#20242c", 1, 4, 1);
-    ff.title = "First four (8:1)";
+    // top line under the zeros
+    const tl = this.cell("topline", "0-00-1-2-3", "#20242c", 1, 4, 2);
+    tl.title = "Top line (6:1)";
 
     // line-click zones for splits/streets/corners/sixlines overlay
     this.buildGutterZones();
