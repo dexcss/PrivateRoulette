@@ -288,7 +288,7 @@ public sealed class MainWindow : Window
             ImGui.TextDisabled("waiting for table state…");
 
         SectionText(state != null ? $"Players ({state.Players.Count})" : "Players");
-        if (state != null && ImGui.BeginTable("players", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY))
+        if (state != null && ImGui.BeginTable("players", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.ScrollY, new Vector2(0, 200)))
         {
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Balance", ImGuiTableColumnFlags.WidthFixed, 90);

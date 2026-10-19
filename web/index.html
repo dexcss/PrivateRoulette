@@ -23,8 +23,22 @@
         </div>
         <p class="muted small">
           Got an invite link? Just open it — it fills this in automatically.
-          <a href="#" id="open-settings">Server settings</a>
+          <a href="#" id="open-settings">Server settings</a> ·
+          <a href="#" id="dealer-open">Dealer console</a>
         </p>
+      </div>
+
+      <div id="dealer-card" class="join-card" hidden>
+        <label>Dealer token</label>
+        <input id="dealer-token" type="password" placeholder="your DEALER_TOKEN" autocomplete="off" />
+        <div class="row">
+          <button id="dealer-login" class="primary">Dealer login</button>
+          <button id="dealer-logout" class="ghost">Log out</button>
+        </div>
+        <div id="dealer-games" class="dealer-games"></div>
+        <div class="row">
+          <button id="dealer-create" class="primary">Create control game</button>
+        </div>
       </div>
       <div class="fair-note">
         Every spin is verifiable: <code>result = uint(sha256(dice + ":" + control)) % 37</code>.
@@ -63,6 +77,32 @@
       </div>
 
       <div class="right">
+        <div id="dealer-bar" class="dealer-bar" hidden>
+          <div class="drow">
+            <input id="d-name" placeholder="Name@World" autocomplete="off" />
+            <input id="d-bankroll" type="number" placeholder="Bankroll" value="1000000" />
+            <label class="chk"><input type="checkbox" id="d-vip" /> VIP</label>
+            <label class="chk"><input type="checkbox" id="d-free" /> Free</label>
+            <button id="d-add">Add player</button>
+          </div>
+          <div class="drow">
+            <button id="d-spin-req">Request spin</button>
+            <input id="d-dice" type="number" placeholder="dice 0-999" />
+            <button id="d-spin">Spin</button>
+            <span id="d-manual-wrap" hidden>
+              <input id="d-manual" type="number" placeholder="number 0-37" />
+              <button id="d-force">Force</button>
+            </span>
+          </div>
+          <div class="drow">
+            <button id="d-clear">Clear bets</button>
+            <button id="d-rebet">Rebet</button>
+            <button id="d-ledger">Refresh ledger</button>
+            <button id="d-csv">Export CSV</button>
+            <button id="d-games" class="ghost">← Games</button>
+          </div>
+        </div>
+
         <div id="players" class="players"></div>
 
         <div id="bet-wrap" class="bet-wrap">

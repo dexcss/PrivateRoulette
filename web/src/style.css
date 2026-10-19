@@ -236,3 +236,32 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
   75% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -64%) scale(1); }
 }
+
+/* ---------- dealer console ---------- */
+
+.dealer-bar {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px;
+}
+.drow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.drow input {
+  padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel2); color: var(--text); font-size: 13px; width: 150px;
+}
+.drow input[type="number"] { width: 120px; }
+.drow button { padding: 6px 10px; font-size: 13px; }
+.chk { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); }
+
+.pactions { display: flex; gap: 4px; margin-left: 4px; }
+.pactions button { padding: 2px 7px; font-size: 11px; }
+
+.dealer-games { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
+.dg {
+  display: flex; gap: 8px; align-items: center;
+  padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel2);
+}
+.dgid { font-weight: 700; letter-spacing: 1px; }
+.dg button { padding: 3px 8px; font-size: 12px; }
+.dg .muted { flex: 1; }

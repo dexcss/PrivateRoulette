@@ -41,6 +41,10 @@ let board: Board | null = null;
 let selectedChip = 10000;
 let rejoinBets: Record<string, number> | null = null;
 let prevBalance = 0;
+let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
+let dealerGames: any[] = [];
+let lastLedger: any = null;
+const playerKeys = new Map<string, string>();
 
 // ---------- dom ----------
 
@@ -67,6 +71,10 @@ const controlNote = $("#control-note");
 const lastNet = $("#last-net");
 const proofLine = $("#proof-line");
 const settingsDlg = $("#settings-dlg") as HTMLDialogElement;
+const dealerCard = $("#dealer-card");
+const dealerTokenInput = $("#dealer-token");
+const dealerGamesEl = $("#dealer-games");
+const dealerBar = $("#dealer-bar");
 
 // ---------- landing ----------
 
@@ -125,7 +133,9 @@ function showConnecting() {
 
 api.onOpen(() => {
   statusLabel.textContent = "connected";
-  api.send("hello", role === "dealer" ? { role, token: localStorage.getItem("pr_dealer_token") ?? "" } : { role, game_id: gameId, player_key: playerKey });
+  api.send("hello", role === "dealer"
+    ? { role, token: localStorage.getItem("pr_dealer_token") ?? "", dealer_name: "Web Dealer", dealer_world: "" }
+    : { role, game_id: gameId, player_key: playerKey });
   if (role === "player") api.send("set_ready", { ready: false });
 });
 
@@ -138,10 +148,42 @@ api.on("hello_ok", (d) => {
     me = { playerId: d.player_id, displayName: d.display_name };
     // players may re-open the page: request nothing special; state arrives
   }
+  if (d.role === "dealer") {
+    role = "dealer";
+    // stay on the landing page and show the games panel
+    viewLanding.hidden = false;
+    viewTable.hidden = true;
+    dealerCard.hidden = false;
+    (dealerTokenInput as HTMLInputElement).value = dealerToken;
+    statusLabel.textContent = "dealer connected";
+  }
+});
+
+api.on("games_list", (d: { games: any[] }) => {
+  dealerGames = d.games ?? [];
+  renderDealerGames();
+});
+
+api.on("game_created", (d: { game_id: string }) => {
+  if (role !== "dealer") return;
+  gameId = d.game_id;
+  openDealerTable();
+});
+
+api.on("dealer_ok", (d: { message?: string }) => {
+  statusLabel.textContent = d.message ?? "ok";
+});
+
+api.on("ledger", (d: any) => {
+  lastLedger = d;
+  statusLabel.textContent = `ledger: ${(d.rounds ?? []).length} rounds · ${(d.all_bets ?? []).length} bets`;
 });
 
 api.on("game_state", (d: GameStateMsg) => {
   state = d;
+  for (const p of ((d as any).players ?? []) as any[]) {
+    if (p?.id && p?.player_key) playerKeys.set(p.id, p.player_key);
+  }
   renderState();
 });
 
@@ -251,6 +293,23 @@ function renderState() {
   }
   if (role === "spectator") statusLabel.textContent = "spectating";
 
+  // dealer controls
+  dealerBar.hidden = role !== "dealer";
+  if (role === "dealer") {
+    const manualWrap = document.getElementById("d-manual-wrap");
+    if (manualWrap) manualWrap.hidden = state.spin_mode !== "manual";
+    const spinBtn = document.getElementById("d-spin") as HTMLButtonElement | null;
+    const diceInput = document.getElementById("d-dice") as HTMLInputElement | null;
+    if (spinBtn && diceInput) {
+      // the dice spin is only possible while the table is locked and in control mode
+      const armed = state.spin_mode === "control" && state.table_locked && !state.spinning;
+      spinBtn.disabled = !armed;
+      diceInput.disabled = !armed;
+    }
+    const reqBtn = document.getElementById("d-spin-req") as HTMLButtonElement | null;
+    if (reqBtn) reqBtn.disabled = state.table_locked || state.spinning;
+  }
+
   // player controls
   if (role === "player" && me) {
     const myId = me.playerId;
@@ -282,6 +341,16 @@ function renderBalance(players: PublicPlayer[]) {
 }
 
 function renderPlayers(players: PublicPlayer[]) {
+  const dealerActions = (p: PublicPlayer) =>
+    role === "dealer"
+      ? `<span class="pactions">
+           <button data-act="plus" data-id="${p.id}" title="+100k">+100k</button>
+           <button data-act="minus" data-id="${p.id}" title="-100k">-100k</button>
+           <button data-act="cashout" data-id="${p.id}" title="Settle and remove">Cash out</button>
+           <button data-act="link" data-id="${p.id}" title="Copy invite link">Link</button>
+         </span>`
+      : "";
+
   playersList.innerHTML = players
     .map(
       (p) => `
@@ -292,6 +361,7 @@ function renderPlayers(players: PublicPlayer[]) {
         ${p.is_vip ? '<span class="tag vip">vip</span>' : ""}
         <span class="pbets">${Object.entries(p.bets).map(([t, a]) => `${a.toLocaleString()}`).join(" · ") || ""}</span>
         <span class="pbal">${p.balance.toLocaleString()}</span>
+        ${dealerActions(p)}
       </div>`,
     )
     .join("");
@@ -384,6 +454,174 @@ cashoutBtn.addEventListener("click", () => {
 
 rebetBtn.addEventListener("click", () => api.send("rebet_mine"));
 clearBtn.addEventListener("click", () => api.send("clear_my_bets"));
+
+// ---------- dealer console ----------
+
+function renderDealerGames(): void {
+  dealerGamesEl.innerHTML = dealerGames.length
+    ? dealerGames
+        .map(
+          (g) => `<div class="dg">
+            <span class="dgid">${g.id}</span>
+            <span class="muted small">${g.status} · ${g.players}p${g.control_number ? " · #" + g.control_number : ""}</span>
+            <button data-open="${g.id}">Open</button>
+            <button data-del="${g.id}" class="ghost" title="Shift+click to delete">✕</button>
+          </div>`,
+        )
+        .join("")
+    : `<div class="muted small">no games yet — create one below</div>`;
+}
+
+function openDealerTable(): void {
+  viewLanding.hidden = true;
+  viewTable.hidden = false;
+  dealerBar.hidden = false;
+  api.send("join_game", { game_id: gameId });
+}
+
+$("#dealer-open").addEventListener("click", (e) => {
+  e.preventDefault();
+  dealerCard.hidden = false;
+  (dealerTokenInput as HTMLInputElement).value = dealerToken;
+});
+
+$("#dealer-login").addEventListener("click", () => {
+  const token = (dealerTokenInput as HTMLInputElement).value.trim();
+  if (!token) return;
+  dealerToken = token;
+  localStorage.setItem("pr_dealer_token", token);
+  role = "dealer";
+  api.disconnect();
+  api.connect();
+});
+
+$("#dealer-logout").addEventListener("click", () => {
+  localStorage.removeItem("pr_dealer_token");
+  location.reload();
+});
+
+$("#dealer-create").addEventListener("click", () => {
+  api.send("create_game", {
+    spin_mode: "control",
+    dealer_name: "Web Dealer",
+    dealer_world: "",
+    max_bet_inner: 500000,
+    max_bet_outer: 250000,
+    max_bet_inner_vip: 1000000,
+    max_bet_outer_vip: 500000,
+  });
+});
+
+dealerGamesEl.addEventListener("click", (e) => {
+  const t = e.target as HTMLElement;
+  const open = t.getAttribute("data-open");
+  const del = t.getAttribute("data-del");
+  if (open) {
+    gameId = open;
+    openDealerTable();
+  } else if (del && e.shiftKey) {
+    api.send("join_game", { game_id: del });
+    setTimeout(() => api.send("delete_game", { game_id: del }), 300);
+  }
+});
+
+$("#d-games").addEventListener("click", () => {
+  viewTable.hidden = true;
+  viewLanding.hidden = false;
+  dealerCard.hidden = false;
+  gameId = "";
+  api.send("list_games");
+});
+
+$("#d-add").addEventListener("click", () => {
+  const name = ($("#d-name") as HTMLInputElement).value.trim();
+  if (!name || !gameId) return;
+  const bankroll = Number(($("#d-bankroll") as HTMLInputElement).value) || 0;
+  api.send("add_player", {
+    name,
+    display_name: name.split("@")[0],
+    bankroll,
+    game_id: gameId,
+    is_vip: ($("#d-vip") as HTMLInputElement).checked,
+    is_freeplay: ($("#d-free") as HTMLInputElement).checked,
+  });
+  ($("#d-name") as HTMLInputElement).value = "";
+});
+
+$("#d-spin-req").addEventListener("click", () => {
+  api.send("request_spin", { game_id: gameId });
+  sfx.ready();
+});
+
+$("#d-spin").addEventListener("click", () => {
+  const dice = Number(($("#d-dice") as HTMLInputElement).value);
+  if (!Number.isFinite(dice) || dice < 0 || dice > 999) {
+    statusLabel.textContent = "dice must be 0-999";
+    return;
+  }
+  api.send("spin", { game_id: gameId, dice_roll: dice });
+});
+
+$("#d-force").addEventListener("click", () => {
+  const n = Number(($("#d-manual") as HTMLInputElement).value);
+  if (!Number.isFinite(n) || n < 0 || n > 37) {
+    statusLabel.textContent = "number must be 0-36 or 37 (00)";
+    return;
+  }
+  api.send("spin", { game_id: gameId, number: n });
+});
+
+$("#d-clear").addEventListener("click", () => api.send("clear_bets", { game_id: gameId }));
+$("#d-rebet").addEventListener("click", () => api.send("rebet", { game_id: gameId }));
+$("#d-ledger").addEventListener("click", () => api.send("get_ledger", { game_id: gameId }));
+
+$("#d-csv").addEventListener("click", () => {
+  if (!lastLedger) {
+    statusLabel.textContent = "refresh the ledger first";
+    return;
+  }
+  const rows: string[] = ["section,round,player,detail,amount,payout,time"];
+  for (const r of lastLedger.rounds ?? []) {
+    rows.push(`round,${r.round_number},,winning ${displayNumber(r.winning_number)} ${r.winning_color},${r.total_bets},${r.total_payouts},${r.spun_at}`);
+  }
+  for (const b of lastLedger.all_bets ?? []) {
+    rows.push(`bet,${b.round_number},"${b.player_name}",${b.bet_type},${b.bet_amount},${b.payout_amount},${b.placed_at}`);
+  }
+  for (const p of lastLedger.players ?? []) {
+    rows.push(`player,,"${p.player_name}",,${p.buy_in_amount},${p.cash_out_amount ?? ""},${p.joined_at}`);
+  }
+  for (const a of lastLedger.adjustments ?? []) {
+    rows.push(`adjustment,,"${a.player_name}","${a.reason}",${a.adjustment_amount},,${a.adjusted_at}`);
+  }
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${gameId || "ledger"}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+playersList.addEventListener("click", (e) => {
+  if (role !== "dealer") return;
+  const t = e.target as HTMLElement;
+  const act = t.getAttribute("data-act");
+  const id = t.getAttribute("data-id");
+  if (!act || !id || !gameId) return;
+  if (act === "plus") api.send("adjust_balance", { player_id: id, delta: 100000, game_id: gameId });
+  if (act === "minus") api.send("adjust_balance", { player_id: id, delta: -100000, game_id: gameId });
+  if (act === "cashout") api.send("cashout_player", { player_id: id, game_id: gameId });
+  if (act === "link") {
+    const key = playerKeys.get(id);
+    if (key) {
+      const url = `${location.origin}${location.pathname}#/${gameId}/${key}`;
+      navigator.clipboard?.writeText(url);
+      statusLabel.textContent = "invite link copied";
+    } else {
+      statusLabel.textContent = "open the game state first (player key not loaded)";
+    }
+  }
+});
+
 
 // ---------- boot ----------
 
