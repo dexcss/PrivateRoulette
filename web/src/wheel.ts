@@ -104,7 +104,7 @@ export class Wheel {
     const relEnd = pocketIndex * SLOT - Math.PI / 2;
 
     const wheelFrom = this.wheelAngle;
-    const wheelTo = wheelFrom + (1.6 + Math.random() * 0.5) * TAU;
+    const wheelTo = wheelFrom + (14 + Math.random() * 3) * TAU;
 
     // animate the ball RELATIVE to the wheel so it always settles exactly in
     // the winning pocket; the ball races against the wheel, then bleeds speed
@@ -176,7 +176,7 @@ export class Wheel {
     const tWheel = Math.min(1, elapsed / s.duration);
 
     // the rotor spins up then bleeds off speed over the whole sequence
-    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.smoothstep(tWheel);
+    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.sampleProgress(s.progress, tWheel);
 
     // pre-roll: the ball rides the rim while the wheel gets going
     const tBall = Math.max(0, (elapsed - s.preRoll) / (s.duration - s.preRoll));
