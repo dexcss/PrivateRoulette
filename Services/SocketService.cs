@@ -79,14 +79,34 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
     public async Task StartAsync()
     {
-        if (this.connecting || this.disposed) return;
+        if (this.disposed || this.connecting) return;
+        if (this.ws?.State == WebSocketState.Open) return; // healthy — do not churn
+
+        await this.ConnectCoreAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Tears down whatever exists and opens a fresh connection.</summary>
+    private async Task ForceReconnectAsync()
+    {
+        if (this.disposed || this.connecting) return;
         this.connecting = true;
         try
         {
             this.cts?.Cancel();
-            this.cts = new CancellationTokenSource();
-            this.ws?.Dispose();
+            try { this.ws?.Dispose(); } catch { }
+        }
+        catch { }
+        this.connecting = false;
+        await this.ConnectCoreAsync().ConfigureAwait(false);
+    }
 
+    private async Task ConnectCoreAsync()
+    {
+        if (this.connecting || this.disposed) return;
+        this.connecting = true;
+        try
+        {
+            this.cts = new CancellationTokenSource();
             var socket = new ClientWebSocket();
             socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             await socket.ConnectAsync(new Uri(this.config.ApiUrl), this.cts.Token).ConfigureAwait(false);
@@ -234,7 +254,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
         var delay = TimeSpan.FromSeconds(Math.Min(2 * attempt, 30));
         this.log.Debug($"reconnect attempt {attempt} in {delay.TotalSeconds:0}s");
         await Task.Delay(delay).ConfigureAwait(false);
-        await this.StartAsync().ConfigureAwait(false);
+        await this.ForceReconnectAsync().ConfigureAwait(false);
     }
 
     private void Dispatch(string t, JObject d)
