@@ -102,7 +102,7 @@ export class Wheel {
 
     const ballFrom = this.wheelAngle + Math.PI;
     const ballTurns = 6 + Math.random() * 2;
-    const ballTo = wheelTo + pocketAngle + ballTurns * TAU;
+    const ballTo = wheelTo + pocketAngle - Math.PI / 2 + ballTurns * TAU;
 
     this.trail = [];
     this.spin = {
@@ -308,7 +308,7 @@ export class Wheel {
       ballA = this.ballAngle;
     } else {
       ballR = R * 0.665;
-      ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT : Math.PI);
+      ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT - Math.PI / 2 : Math.PI);
     }
 
     const bx = c + Math.cos(ballA) * ballR;
