@@ -171,7 +171,7 @@ api.on("chat_message", addChatLine);
 
 api.on("spin", (d) => {
   if (!wheel) return;
-  wheel.spinTo(d.result, 6500);
+  wheel.spinTo(d.result);
   renderProof(d);
   renderHistoryFromSpin(d.result);
 });
@@ -389,6 +389,7 @@ clearBtn.addEventListener("click", () => api.send("clear_my_bets"));
 
 wheel = new Wheel(wheelCanvas);
 wheel.setTickCallback(() => sfx.tick());
+wheel.setSettleCallback(() => sfx.land());
 board = new Board(boardEl, {
   place: (target) => { sfx.chip(); api.send("place_bet", { target, amount: selectedChip }); },
   remove: (target) => api.send("remove_bet", { target }),

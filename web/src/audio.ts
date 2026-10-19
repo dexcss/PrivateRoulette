@@ -48,6 +48,11 @@ export class Sfx {
     this.blip(880, 0.08, "sine", 0.06, 0.07);
   }
 
+  land() {
+    this.blip(150, 0.06, "sine", 0.07);
+    this.blip(95, 0.12, "sine", 0.06, 0.03);
+  }
+
   win() {
     this.blip(523, 0.12, "triangle", 0.08);
     this.blip(659, 0.12, "triangle", 0.08, 0.11);

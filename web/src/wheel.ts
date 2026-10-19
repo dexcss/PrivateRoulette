@@ -26,6 +26,7 @@ function pocketColor(n: number): { top: string; bottom: string; ring: string } {
 interface SpinState {
   startTime: number;
   duration: number;
+  preRoll: number;
   wheelFrom: number;
   wheelTo: number;
   ballFrom: number;
@@ -95,25 +96,26 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 8600): void {
+  spinTo(result: number, durationMs = 9200): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // relative angle of the pocket centre (ball angle minus wheel angle)
     const relEnd = pocketIndex * SLOT - Math.PI / 2;
 
     const wheelFrom = this.wheelAngle;
-    const wheelTo = wheelFrom + (4.5 + Math.random() * 1.5) * TAU;
+    const wheelTo = wheelFrom + (2.2 + Math.random() * 0.6) * TAU;
 
     // animate the ball RELATIVE to the wheel so it always settles exactly in
     // the winning pocket; the ball races against the wheel, decelerates,
-    // drops inward and rattles into place.
-    const relTurns = 11 + Math.random() * 3;
+    // taps the rim, drops inward and teeters into place.
+    const relTurns = 10 + Math.random() * 2.5;
     const relFrom = relEnd + relTurns * TAU;
 
     this.trail = [];
     this.spin = {
       startTime: performance.now(),
       duration: durationMs,
+      preRoll: 900,
       wheelFrom,
       wheelTo,
       ballFrom: relFrom,
@@ -126,14 +128,26 @@ export class Wheel {
     return 1 - Math.pow(1 - x, 3);
   }
 
+  private smoothstep(x: number): number {
+    const c = Math.min(1, Math.max(0, x));
+    return c * c * (3 - 2 * c);
+  }
+
   private update(dt: number): void {
     if (!this.spin) {
       this.wheelAngle += this.idleSpeed * dt;
       return;
     }
     const s = this.spin;
-    const t = (performance.now() - s.startTime) / s.duration;
-    if (t >= 1) {
+    const elapsed = performance.now() - s.startTime;
+    const tWheel = Math.min(1, elapsed / s.duration);
+
+    // the rotor spins up then bleeds off speed over the whole sequence
+    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.smoothstep(tWheel);
+
+    // pre-roll: the ball rides the rim while the wheel gets going
+    const tBall = Math.max(0, (elapsed - s.preRoll) / (s.duration - s.preRoll));
+    if (tBall >= 1) {
       this.wheelAngle = s.wheelTo;
       this.ballAngle = s.wheelTo + s.ballTo;
       this.ballRadiusFactor = this.REST_RADIUS;
@@ -144,13 +158,10 @@ export class Wheel {
       return;
     }
 
-    // wheel keeps turning through the whole spin
-    this.wheelAngle = s.wheelFrom + (s.wheelTo - s.wheelFrom) * this.easeOutCubic(t);
-
-    // ball is animated relative to the wheel: guaranteed to settle on relEnd
-    const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.easeOutQuint(t) + this.rattle(t);
+    // ball is animated relative to the wheel: guaranteed to settle on ballTo
+    const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.ballProgress(tBall) + this.rattle(tBall);
     this.ballAngle = this.wheelAngle + rel;
-    this.ballRadiusFactor = this.ballRadiusAt(t);
+    this.ballRadiusFactor = this.ballRadiusAt(tBall);
 
     // pocket-crossing ticks (throttled so fast spins don't buzz)
     const nowMs = performance.now();
@@ -162,30 +173,54 @@ export class Wheel {
     }
   }
 
-  private easeOutQuint(x: number): number {
-    return 1 - Math.pow(1 - x, 5);
+  /** Rotation progress of the ball relative to the rotor.
+   *  launch → fast orbit → dramatic slow-down → creep into the pocket. */
+  private ballProgress(t: number): number {
+    const launchEnd = 0.08;
+    const orbitEnd = 0.56;
+    const decelEnd = 0.86;
+    if (t < launchEnd) {
+      const u = t / launchEnd;
+      return 0.04 * u * u; // wind-up
+    }
+    if (t < orbitEnd) {
+      const u = (t - launchEnd) / (orbitEnd - launchEnd);
+      return 0.04 + 0.56 * u; // fast, readable orbit
+    }
+    if (t < decelEnd) {
+      const u = (t - orbitEnd) / (decelEnd - orbitEnd);
+      return 0.60 + 0.27 * (1 - Math.pow(1 - u, 3)); // heavy brake
+    }
+    const u = (t - decelEnd) / (1 - decelEnd);
+    return 0.87 + 0.13 * (1 - Math.pow(1 - u, 2.4)); // slow creep into place
   }
 
-  /** damped rattle as the ball skips across pocket separators */
+  /** Fret teeter: the ball skips across separators and settles exactly at t=1. */
   private rattle(t: number): number {
-    if (t < 0.82) return 0;
-    const p = (t - 0.82) / 0.18;
-    return Math.sin(p * Math.PI * 6.5) * SLOT * 0.5 * Math.pow(1 - p, 2.2);
+    if (t < 0.84) return 0;
+    const p = (t - 0.84) / 0.16;
+    const decay = Math.pow(1 - p, 2.6);
+    return Math.sin(p * Math.PI * 7.5) * SLOT * 0.55 * decay;
   }
 
-  /** ball drops from the rim into the pocket band with bouncing arcs */
+  /** Ball height: rides the rim, taps the wall, drops with hops into the well. */
   private ballRadiusAt(t: number): number {
-    const dropStart = 0.62;
-    const dropEnd = 0.82;
-    if (t < dropStart) return 0.925;
+    const tap = 0.72;
+    const dropStart = 0.76;
+    const dropEnd = 0.86;
+
+    if (t < tap) return 0.925;
+    if (t < dropStart) {
+      // tiny outward tap against the rim just before the drop
+      const u = (t - tap) / (dropStart - tap);
+      return 0.925 + Math.sin(u * Math.PI) * 0.012;
+    }
     if (t < dropEnd) {
       const u = (t - dropStart) / (dropEnd - dropStart);
-      // accelerating fall, then caught by the pocket band
-      return 0.925 + (this.REST_RADIUS - 0.925) * (u * u * (3 - 2 * u));
+      return 0.937 + (this.REST_RADIUS - 0.937) * (u * u); // accelerate inward
     }
     const p = (t - dropEnd) / (1 - dropEnd);
-    // three shrinking radial hops as it settles
-    return this.REST_RADIUS + Math.abs(Math.sin(p * Math.PI * 3)) * 0.045 * Math.pow(1 - p, 1.6);
+    return this.REST_RADIUS + Math.abs(Math.sin(p * Math.PI * 2.5)) * 0.05 * Math.pow(1 - p, 1.5);
   }
 
   private draw(now: number): void {
@@ -343,7 +378,7 @@ export class Wheel {
 
     const bx = c + Math.cos(ballA) * ballR;
     const by = c + Math.sin(ballA) * ballR;
-    const br = Math.max(4.5, R * 0.027);
+    const br = Math.max(5, R * 0.034);
 
     // trail while spinning fast
     if (this.spin) {
@@ -368,21 +403,22 @@ export class Wheel {
     ctx.fill();
 
     // ball body
-    const ballGrad = ctx.createRadialGradient(bx - br * 0.35, by - br * 0.4, br * 0.15, bx, by, br);
+    const ballGrad = ctx.createRadialGradient(bx - br * 0.38, by - br * 0.42, br * 0.1, bx, by, br);
     ballGrad.addColorStop(0, "#ffffff");
-    ballGrad.addColorStop(0.55, "#f2f2f2");
-    ballGrad.addColorStop(1, "#b9bdc4");
+    ballGrad.addColorStop(0.45, "#f7f7f5");
+    ballGrad.addColorStop(0.8, "#d9dbdf");
+    ballGrad.addColorStop(1, "#9aa0a8");
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, TAU);
     ctx.fillStyle = ballGrad;
     ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
     // specular
     ctx.beginPath();
-    ctx.arc(bx - br * 0.33, by - br * 0.38, br * 0.22, 0, TAU);
+    ctx.arc(bx - br * 0.34, by - br * 0.4, br * 0.18, 0, TAU);
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fill();
 
