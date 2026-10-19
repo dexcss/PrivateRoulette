@@ -33,6 +33,12 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     private int reconnectAttempt;
     private Func<object>? helloProvider;
 
+    // ---- watchdog: detect zombie sockets the OS still considers "open" ----
+    private DateTimeOffset lastServerActivity = DateTimeOffset.UtcNow;
+    private DateTimeOffset lastPongUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset pingSentAt = DateTimeOffset.MinValue;
+    private Task? watchdogTask;
+
     /// <summary>Marshals socket-thread work to the framework thread. Set by the plugin.</summary>
     public Action<Action>? RunOnMainThread { get; set; }
 
@@ -87,7 +93,11 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
             this.ws = socket;
 
             this.reconnectAttempt = 0;
+            this.lastServerActivity = DateTimeOffset.UtcNow;
+            this.lastPongUtc = DateTimeOffset.MinValue;
+            this.pingSentAt = DateTimeOffset.MinValue;
             this.log.Debug("backend connected");
+            this.watchdogTask = Task.Run(() => this.WatchdogLoop(this.cts!.Token));
             this.MainThread(() =>
             {
                 this.Connected?.Invoke();
@@ -143,6 +153,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
                 var t = env["t"]?.ToString() ?? "";
                 var d = env["d"] as JObject ?? new JObject();
+                this.lastServerActivity = DateTimeOffset.UtcNow;
                 this.Dispatch(t, d);
             }
         }
@@ -163,6 +174,57 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
         });
         if (!this.disposed)
             _ = this.ReconnectLaterAsync();
+    }
+
+    /// <summary>
+    /// Application-level heartbeat. Protocol keepalives can't detect a socket
+    /// that the remote side silently orphaned (e.g. after a backend deploy),
+    /// so we ping and expect pong — silence forces a reconnect.
+    /// </summary>
+    private async Task WatchdogLoop(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested && !this.disposed)
+            {
+                await Task.Delay(5000, ct).ConfigureAwait(false);
+                var socket = this.ws;
+                if (socket?.State != WebSocketState.Open) continue;
+
+                var sinceActivity = DateTimeOffset.UtcNow - this.lastServerActivity;
+                var sincePing = DateTimeOffset.UtcNow - this.pingSentAt;
+
+                var pingUnanswered = this.pingSentAt > DateTimeOffset.MinValue
+                                     && sincePing.TotalSeconds > 12
+                                     && this.lastPongUtc < this.pingSentAt;
+
+                if (pingUnanswered)
+                {
+                    this.log.Warning($"backend silent for {sinceActivity.TotalSeconds:0}s (ping unanswered {sincePing.TotalSeconds:0}s) — forcing reconnect");
+                    this.pingSentAt = DateTimeOffset.MinValue;
+                    try { socket.Dispose(); } catch { }
+                    this.OnDisconnected("watchdog: backend silent");
+                    return;
+                }
+
+                if (sinceActivity.TotalSeconds > 15)
+                {
+                    this.pingSentAt = DateTimeOffset.UtcNow;
+                    try
+                    {
+                        var ping = Encoding.UTF8.GetBytes("{\"t\":\"ping\",\"d\":{}}");
+                        await socket.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        this.OnDisconnected("watchdog: ping failed");
+                        return;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { }
     }
 
     private async Task ReconnectLaterAsync()
@@ -230,6 +292,9 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
                 break;
             case "game_closed":
                 this.MainThread(() => this.GameClosed?.Invoke(d["game_id"]?.ToString() ?? ""));
+                break;
+            case "pong":
+                this.lastPongUtc = DateTimeOffset.UtcNow;
                 break;
             case "dealer_error":
                 var errMsg = d["message"]?.ToString() ?? "error";
