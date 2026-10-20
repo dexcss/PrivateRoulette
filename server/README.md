@@ -40,13 +40,21 @@ Client hello:
 - spectator: `{ role: "spectator", game_id }`
 
 Events mirror the documented flow: `create_game`, `add_player`,
-`adjust_balance`, `request_spin`, `spin` (dice or manual number), `place_bet`,
-`remove_bet`, `set_ready`, `cashout`, `send_chat` … and broadcasts
-`game_state`, `public_bets`, `spin` (with proof), `round_result`,
-`table_history`, `chat_message`.
+`adjust_balance`, `set_player_vip`, `request_spin`, `spin` (dice or manual
+number), `place_bet`, `remove_bet`, `set_ready`, `cashout`, `send_chat` … and
+broadcasts `game_state`, `public_bets`, `spin` (with proof), `round_result`
+(winning `results` with bet labels), `table_history`, `chat_message`.
+Limits are per-spot **and** per-player total, each with VIP variants.
 
-Fairness (identical formula to the one players already know):
-`result = uint32(sha256("{dice_roll}:{control_number}")[0..8]) % 37`
+Fairness (American double-zero; 00 is encoded as 37):
+`result = uint32(sha256("{dice_roll}:{control_number}")[0..8]) % 38`
+
+## DO versioning
+
+Durable Object instances keep the code version they started with. When a
+backend change must apply immediately, bump `DO_VERSION` in `src/worker.ts`
+and redeploy — this starts a fresh DO and resets game storage. `/health`
+returns the current version.
 
 ## Cost
 
