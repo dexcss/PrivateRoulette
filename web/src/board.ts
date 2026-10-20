@@ -14,6 +14,14 @@ function colorOf(n: number): string {
   return RED.has(n) ? "#c0392b" : "#1b1b1f";
 }
 
+/** Maps a cell colour to a CSS class (so gradients can be applied). */
+function colorClass(color: string | undefined): string {
+  if (color === "#c0392b") return "red";
+  if (color === "#0f9d58") return "green";
+  if (color === "#1b1b1f") return "black";
+  return "dark";
+}
+
 /** One visible chip: a player's stake on one bet target. */
 export interface BetChip {
   target: string;
@@ -128,10 +136,9 @@ export class Board {
 
     const makeZero = (target: string, label: string) => {
       const el = document.createElement("div");
-      el.className = "cell zero";
+      el.className = "cell zero green";
       el.dataset.target = target;
       el.style.flex = "1 1 0";
-      el.style.background = "#0f9d58";
       const lbl = document.createElement("span");
       lbl.className = "label";
       lbl.textContent = label;
@@ -193,7 +200,7 @@ export class Board {
     const el = document.createElement("div");
     el.className = "cell";
     el.dataset.target = target;
-    if (color) el.style.background = color;
+    el.classList.add(colorClass(color));
     el.style.gridColumn = `${col} / span ${colSpan}`;
     el.style.gridRow = `${row} / span ${rowSpan}`;
 

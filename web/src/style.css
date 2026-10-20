@@ -139,19 +139,41 @@ canvas { display: block; }
 .chip.sel { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 12px rgba(201,162,39,.35); }
 
 .board-outer { position: relative; min-height: 300px; flex: 1; }
-#board { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; height: 100%; }
+#board {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.05), transparent 42%),
+    radial-gradient(circle at 50% 28%, #15402f, #0a241b 74%);
+  border: 5px solid #3a2413;
+  border-radius: 16px;
+  padding: 12px;
+  height: 100%;
+  box-shadow:
+    inset 0 0 0 2px rgba(201,162,39,.28),
+    inset 0 0 42px rgba(0,0,0,.55),
+    0 12px 34px rgba(0,0,0,.5);
+}
 
 .cell {
-  position: relative; border-radius: 6px; cursor: pointer; user-select: none;
+  position: relative; border-radius: 7px; cursor: pointer; user-select: none;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.14);
   transition: box-shadow .1s ease;
   min-height: 44px;
+  background: #20242c;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -1px 0 rgba(0,0,0,.22);
 }
-/* No `filter` here: filter creates a stacking context on the hovered cell,
-   which lets the neighbouring cells paint over corner/split chips. */
-.cell:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); }
-.cell .label { font-weight: 700; font-size: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.cell.red   { background: radial-gradient(circle at 50% 26%, #ec6a56, #c03a2b 58%, #8e2f24); }
+.cell.black { background: radial-gradient(circle at 50% 26%, #41454f, #23262e 58%, #14161b); }
+.cell.green { background: radial-gradient(circle at 50% 26%, #2cc07a, #0f8a4e 58%, #06472a); }
+.cell.dark  { background: linear-gradient(180deg, #2a2f3a, #161920); }
+/* glossy top sheen */
+.cell::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 46%, rgba(0,0,0,.20));
+  pointer-events: none;
+}
+.cell:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.45), inset 0 0 10px rgba(255,255,255,.12); }
+.cell .label { position: relative; z-index: 1; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.75), 0 0 5px rgba(0,0,0,.35); }
 .cell.outside .label { font-size: 12px; letter-spacing: .8px; }
 
 /* Chip stacks are transparent flex containers; each player's chip is a .pchip.
@@ -167,13 +189,23 @@ canvas { display: block; }
 }
 .pchip {
   flex: 0 0 auto;
-  width: 26px; height: 26px; border-radius: 50%;
+  position: relative;
+  width: 27px; height: 27px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-weight: 900; font-size: 9px; letter-spacing: -.3px;
-  background: var(--chip, #c9a227);
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--chip, #c9a227) 72%, #fff), var(--chip, #c9a227));
-  border: 2px solid rgba(255,255,255,.85);
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.12), 0 2px 7px rgba(0,0,0,.65);
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--chip, #c9a227) 80%, #fff) 0 47%, transparent 47%),
+    radial-gradient(circle, var(--chip, #c9a227) 0 68%, transparent 68%),
+    repeating-conic-gradient(#f6f2e8 0 16deg, color-mix(in srgb, var(--chip, #c9a227) 55%, #000) 16deg 32deg);
+  border: 1px solid rgba(0,0,0,.35);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.5),
+    inset 0 -1px 2px rgba(0,0,0,.45),
+    0 2px 6px rgba(0,0,0,.6);
+}
+.pchip::before {
+  content: ""; position: absolute; inset: 6px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.5); pointer-events: none;
 }
 .pchip.mine { outline: 2px solid #f3d47c; outline-offset: 1px; }
 .pchip.new { animation: chipIn .12s ease-out; }
