@@ -14,7 +14,7 @@ deployed Pages site.
 | Latest tag | `v0.8.0.0` (plus `backup-pre-revamp`) |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
 | Combined repo | PrivateRoulette `0.8.0.0` (GitHub API; raw CDN may lag ~5 min) |
-| Pages JS asset | `assets/index-BCQkavbT.js` |
+| Pages JS asset | `assets/index-CDvtfi5Z.js` (board-polish build) |
 | Working tree | clean |
 | Web demo | live (`#/demo`, playable, shared payout table) |
 
@@ -112,8 +112,9 @@ deployed Pages site.
   from the URL, opens the game table.
 - **Deploy (0.8.0.0)**: CI release succeeded (manifest/assembly both
   `0.8.0.0`, release published 05:48Z); the combined repo API serves
-  `0.8.0.0`; the Pages asset changed to `index-BCQkavbT.js` and the live demo
-  loads; worker `/health` reports `v12`.
+  `0.8.0.0`; the release Pages asset was `index-BCQkavbT.js` (the later
+  line/dot board build is `index-CDvtfi5Z.js`) and the live demo loads; worker
+  `/health` reports `v12`.
 
 ## 5. Findings
 
