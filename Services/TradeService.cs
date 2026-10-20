@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -6,6 +7,7 @@ using Dalamud.Plugin.Services;
 
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 using PrivateRoulette.Configuration;
 
@@ -109,7 +111,7 @@ public sealed unsafe class TradeService : IDisposable
         this.chat.Print($"[trade] {this.partnerLabel}: {delta:+#,0;-#,0} gil applied to balance.");
     }
 
-    /// <summary>Find a seated player whose name appears in the trade window's values.</summary>
+    /// <summary>Find a seated player whose name appears in the trade window.</summary>
     private (string? id, string? label) ResolvePartner()
     {
         try
@@ -117,6 +119,17 @@ public sealed unsafe class TradeService : IDisposable
             var addon = this.gameGui.GetAddonByName<AddonTrade>("Trade", 1);
             if (addon == null) return (null, null);
 
+            // 1) walk all text nodes — the partner name is rendered as text
+            var texts = new List<string>(32);
+            this.WalkTextNodes(addon->AtkUnitBase.RootNode, texts);
+            foreach (var text in texts)
+            {
+                if (string.IsNullOrWhiteSpace(text) || text.Length > 64) continue;
+                var match = this.session.FindPlayerByName(text.Trim());
+                if (match != null) return (match.Value.Id, match.Value.Name);
+            }
+
+            // 2) fallback: string values
             for (var i = 0; i < addon->AtkValuesCount; i++)
             {
                 string? text;
@@ -131,10 +144,11 @@ public sealed unsafe class TradeService : IDisposable
 
                 if (string.IsNullOrWhiteSpace(text) || text.Length > 64) continue;
 
-                var match = this.session.FindPlayerByName(text);
-                if (match != null)
-                    return (match.Value.Id, match.Value.Name);
+                var match = this.session.FindPlayerByName(text.Trim());
+                if (match != null) return (match.Value.Id, match.Value.Name);
             }
+
+            this.log.Debug($"trade partner not matched; window texts: {string.Join(" | ", texts)}");
         }
         catch (Exception e)
         {
@@ -142,6 +156,27 @@ public sealed unsafe class TradeService : IDisposable
         }
 
         return (null, null);
+    }
+
+    private void WalkTextNodes(AtkResNode* node, List<string> sink)
+    {
+        if (node == null || sink.Count > 400) return;
+
+        if (node->Type == NodeType.Text)
+        {
+            try
+            {
+                var text = ((AtkTextNode*)node)->NodeText.ToString();
+                if (!string.IsNullOrEmpty(text)) sink.Add(text);
+            }
+            catch
+            {
+                // ignore malformed nodes
+            }
+        }
+
+        this.WalkTextNodes(node->ChildNode, sink);
+        this.WalkTextNodes(node->NextSiblingNode, sink);
     }
 
     public void Dispose()

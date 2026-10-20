@@ -33,6 +33,7 @@ public sealed class MainWindow : Window
     private string apiKeyInput = string.Empty;
     private int adjustAmountInt = 100;
     private bool newPlayerVip;
+    private readonly Dictionary<string, int> playerAdjust = new();
     private bool newPlayerFreeplay;
 
     public MainWindow(PluginConfig config, SocketService socket, RouletteSession session, IPluginLog log, Action showWheel)
@@ -294,7 +295,7 @@ public sealed class MainWindow : Window
             ImGui.TableSetupColumn("Balance", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("Bets", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 90);
-            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 150);
+            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 340);
             ImGui.TableHeadersRow();
 
             foreach (var p in state.Players)
@@ -322,23 +323,35 @@ public sealed class MainWindow : Window
 
                 ImGui.TableNextColumn();
                 ImGui.PushID(p.Id);
-                if (ImGui.Button("+100"))
-                    this.session.AdjustBalance(p.Id, 100);
+                var amount = this.playerAdjust.TryGetValue(p.Id, out var a) ? a : 100000;
+                ImGui.SetNextItemWidth(92);
+                if (ImGui.InputInt("##amt", ref amount, 0))
+                    this.playerAdjust[p.Id] = amount;
                 ImGui.SameLine();
-                if (ImGui.Button("-100"))
-                    this.session.AdjustBalance(p.Id, -100);
+                if (ImGui.SmallButton("+"))
+                    this.session.AdjustBalance(p.Id, this.playerAdjust.GetValueOrDefault(p.Id, 100000));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Add this amount to the balance");
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Copy link"))
+                if (ImGui.SmallButton("−"))
+                    this.session.AdjustBalance(p.Id, -this.playerAdjust.GetValueOrDefault(p.Id, 100000));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Subtract this amount from the balance");
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Link"))
                 {
                     var link = this.session.PlayerLink(p);
                     if (link != null)
+                    {
                         ImGui.SetClipboardText(link);
+                        this.log.Info($"copied invite link for {p.DisplayName}");
+                    }
                 }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Copy the invite link");
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Tell"))
                     this.session.SendLink(p);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Whisper the invite link to this player");
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Cash out"))
+                if (ImGui.SmallButton("Cash"))
                     this.session.CashoutPlayer(p.Id);
                 ImGui.PopID();
             }

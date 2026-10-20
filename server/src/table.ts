@@ -231,6 +231,16 @@ export class TableRoom extends DurableObject<Env> {
     }
   }
 
+  /** game_state goes to dealers with player keys, to players without. */
+  private broadcastGameState(): void {
+    if (!this.state) return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const conn = this.connFor(ws);
+      if (conn.quit) continue;
+      this.send(ws, "game_state", dealerStateView(this.state, conn.role === "dealer"));
+    }
+  }
+
   private err(ws: WebSocket, message: string): void {
     this.send(ws, "dealer_error", { message });
   }
@@ -557,7 +567,7 @@ export class TableRoom extends DurableObject<Env> {
       player_key: player.player_key,
     });
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.systemChat(`${displayName} joined the table.`);
   }
 
@@ -582,7 +592,7 @@ export class TableRoom extends DurableObject<Env> {
     g.adjustments.push(rec);
     await this.save();
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.send(ws, "dealer_ok", { message: `${p.display_name} balance ${delta > 0 ? "+" : ""}${delta}` });
   }
 
@@ -604,7 +614,7 @@ export class TableRoom extends DurableObject<Env> {
     });
     await this.save();
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.send(ws, "dealer_ok", { message: `Recorded ${amount} gil for ${p.display_name}` });
   }
 
@@ -621,7 +631,7 @@ export class TableRoom extends DurableObject<Env> {
       spin_mode: g.spin_mode,
       control_number: g.control_number,
     });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
   }
 
   private async spin(ws: WebSocket, d: any): Promise<void> {
@@ -646,7 +656,7 @@ export class TableRoom extends DurableObject<Env> {
     g.spinning = true;
     g.awaiting_dice = false;
     await this.save();
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
 
     const { result, proof } = await computeResult(diceRoll, g.control_number, forcedNumber);
     const color = colorOf(result);
@@ -710,7 +720,7 @@ export class TableRoom extends DurableObject<Env> {
     });
     this.broadcast("table_history", { history: g.history.slice(-25) });
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
 
     const winners = g.players.filter((p) => !p.left_at && p.last_round_net > 0);
     if (winners.length > 0) {
@@ -754,7 +764,7 @@ export class TableRoom extends DurableObject<Env> {
     const g = this.state!;
     g.game_status = "finished";
     await this.save();
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.systemChat("Game finished. Settle payouts with your players.");
     this.send(ws, "dealer_ok", { message: "Game finished" });
   }
@@ -782,7 +792,7 @@ export class TableRoom extends DurableObject<Env> {
     p.left_at = nowIso();
     await this.save();
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.systemChat(`${p.display_name} cashed out ${p.cash_out_amount.toLocaleString()} gil.`);
     this.send(ws, "dealer_ok", { message: `Cashed out ${p.display_name}: ${p.cash_out_amount.toLocaleString()} gil` });
   }
@@ -926,7 +936,7 @@ export class TableRoom extends DurableObject<Env> {
     g.game_status = g.players.every((x) => x.left_at) ? "payouts_complete" : g.game_status;
     await this.save();
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
-    this.broadcast("game_state", dealerStateView(g));
+    this.broadcastGameState();
     this.systemChat(`${p.display_name} cashed out ${p.cash_out_amount.toLocaleString()} gil. See you next time!`);
     this.send(ws, "cashout_ok", { amount: p.cash_out_amount });
   }
@@ -1004,7 +1014,7 @@ function clampNum(v: any, min: number, max: number, fallback: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-function dealerStateView(g: GameState) {
+function dealerStateView(g: GameState, includeKeys = false) {
   return {
     spinning: g.spinning,
     table_locked: g.table_locked,
@@ -1019,6 +1029,6 @@ function dealerStateView(g: GameState) {
     max_bet_inner_vip: g.max_bet_inner_vip,
     max_bet_outer_vip: g.max_bet_outer_vip,
     chip_denominations: g.chip_denominations,
-    players: g.players.map(publicPlayer),
+    players: g.players.map((p) => (includeKeys ? { ...publicPlayer(p), player_key: p.player_key } : publicPlayer(p))),
   };
 }

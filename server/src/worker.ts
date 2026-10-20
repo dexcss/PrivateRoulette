@@ -9,7 +9,7 @@ export { TableRoom };
 // until they are evicted. Bumping this suffix on deploys that must take effect
 // immediately spins up a fresh instance (storage is per-name, so bumping
 // resets the games list — only do it when that is acceptable).
-const DO_VERSION = "v7";
+const DO_VERSION = "v8";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
