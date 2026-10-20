@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 using Dalamud.Game.Command;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -30,12 +32,13 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SocketService socket;
     private readonly RouletteSession session;
     private readonly DiceService dice;
+    private readonly TradeService trade;
     private readonly PluginUi ui;
 
     /// <summary>Work items marshalled from socket threads onto the framework thread.</summary>
     private readonly ConcurrentQueue<Action> mainThreadQueue = new();
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState)
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState, IAddonLifecycle addonLifecycle, IGameGui gameGui, ITargetManager targetManager, IPartyList partyList)
     {
         this.pluginInterface = pluginInterface;
         this.commandManager = commandManager;
@@ -53,6 +56,22 @@ public sealed class Plugin : IDalamudPlugin
         this.session.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.socket.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.session.RunCommand = cmd => this.commandManager.ProcessCommand(cmd);
+        this.session.IsInParty = () => partyList.Length > 0;
+        this.session.GetTargetPlayerName = () =>
+        {
+            try
+            {
+                if (targetManager.Target is IPlayerCharacter pc)
+                {
+                    var name = pc.Name.TextValue;
+                    var world = pc.HomeWorld.Value.Name.ExtractText();
+                    return string.IsNullOrEmpty(world) ? name : $"{name}@{world}";
+                }
+            }
+            catch { }
+            return null;
+        };
+        this.trade = new TradeService(this.config, this.session, addonLifecycle, gameGui, chatGui, log);
         this.socket.SetHelloProvider(() => this.session.CurrentHello() ?? new { role = "dealer", token = "", dealer_name = "", dealer_world = "" });
 
         this.commandManager.AddHandler(MainCommand, new CommandInfo(this.OnCommand)
@@ -85,6 +104,7 @@ public sealed class Plugin : IDalamudPlugin
             }
 
             this.dice.Tick();
+            this.trade.Tick();
         }
 
         this.ui.Draw();
@@ -115,6 +135,7 @@ public sealed class Plugin : IDalamudPlugin
         this.commandManager.RemoveHandler(MainCommand);
         this.ui.Dispose();
         this.dice.Dispose();
+        this.trade.Dispose();
         this.session.Dispose();
         this.socket.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
         this.config.Save();

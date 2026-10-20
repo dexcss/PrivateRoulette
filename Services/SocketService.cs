@@ -395,8 +395,8 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public Task AddPlayerAsync(string name, string displayName, long bankroll, string gameId, bool isVip = false, bool isFreeplay = false)
         => this.SendAsync("add_player", new { name, display_name = displayName, bankroll, game_id = gameId, is_vip = isVip, is_freeplay = isFreeplay });
 
-    public Task AdjustBalanceAsync(string playerId, long delta, string gameId)
-        => this.SendAsync("adjust_balance", new { player_id = playerId, delta, game_id = gameId });
+    public Task AdjustBalanceAsync(string playerId, long delta, string gameId, string reason = "Dealer adjustment")
+        => this.SendAsync("adjust_balance", new { player_id = playerId, delta, reason, game_id = gameId });
 
     public Task GetLedgerAsync(string gameId) => this.SendAsync("get_ledger", new { game_id = gameId });
 

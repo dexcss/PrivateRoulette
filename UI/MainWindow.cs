@@ -356,6 +356,14 @@ public sealed class MainWindow : Window
         if (ImGui.Button("Add player"))
             this.session.AddPlayer(newPlayerName.Trim(), newPlayerName.Trim().Split('@')[0], newPlayerBankrollInt, newPlayerVip, newPlayerFreeplay);
         ImGui.EndDisabled();
+        ImGui.SameLine();
+        var targetName = this.session.GetTargetPlayerName?.Invoke();
+        ImGui.BeginDisabled(string.IsNullOrEmpty(targetName));
+        if (ImGui.Button("Add targeted"))
+            this.session.AddTargetedPlayer(newPlayerBankrollInt, newPlayerVip, newPlayerFreeplay);
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered() && !string.IsNullOrEmpty(targetName))
+            ImGui.SetTooltip(targetName);
 
         SectionText("Last spin");
         var spin = this.session.LastSpin;
@@ -682,6 +690,13 @@ public sealed class SettingsWindow : Window
         if (ImGui.Checkbox("Verbose wire log (debug)", ref verbose))
         {
             this.config.VerboseWireLog = verbose;
+            this.config.Save();
+        }
+
+        var party = this.config.AnnouncePartyResults;
+        if (ImGui.Checkbox("Announce spin results + balances in party chat", ref party))
+        {
+            this.config.AnnouncePartyResults = party;
             this.config.Save();
         }
 

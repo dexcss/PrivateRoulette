@@ -93,7 +93,7 @@ public sealed class RouletteSession : IDisposable
         socket.PlayerCreated += this.OnPlayerCreated;
         socket.SpinReady += r => { this.PendingSpin = r; this.AwaitingDice = r.SpinMode == "control"; this.Changed?.Invoke(); };
         socket.Spin += r => { this.LastSpin = r; this.PendingSpin = null; this.AwaitingDice = false; this.SpinReceived?.Invoke(r); this.Changed?.Invoke(); };
-        socket.RoundResult += r => { this.AwaitingDice = false; this.Changed?.Invoke(); };
+        socket.RoundResult += r => { this.AwaitingDice = false; this.AnnounceRoundToParty(r); this.Changed?.Invoke(); };
         socket.TableHistory += r => { this.History.Clear(); this.History.AddRange(r.History); this.Changed?.Invoke(); };
         socket.ChatHistory += r => { this.Chat.Clear(); this.Chat.AddRange(r.Messages); this.Changed?.Invoke(); };
         socket.ChatMessage += m => { this.Chat.Add(m); this.Changed?.Invoke(); };
@@ -274,6 +274,87 @@ public sealed class RouletteSession : IDisposable
         this.chat?.Print(new XivChatEntry { Message = $"[table] {text}", Type = XivChatType.Echo });
     }
 
+    /// <summary>Match a seated player by full name or display name.</summary>
+    public (string Id, string Name)? FindPlayerByName(string name)
+    {
+        var players = this.State?.Players;
+        if (players == null) return null;
+        foreach (var p in players)
+        {
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.DisplayName, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.Name.Split('@')[0], name, StringComparison.OrdinalIgnoreCase))
+                return (p.Id, p.DisplayName);
+        }
+
+        return null;
+    }
+
+    /// <summary>Applies a completed trade's gil delta to a player's balance.</summary>
+    public void ApplyTradeDelta(string playerId, long delta)
+    {
+        if (this.GameId == null || delta == 0) return;
+        _ = this.socket.AdjustBalanceAsync(playerId, delta, this.GameId, "Trade");
+    }
+
+    /// <summary>Adds the dealer's current target as a player.</summary>
+    public bool AddTargetedPlayer(long bankroll, bool isVip, bool isFreeplay)
+    {
+        var full = this.GetTargetPlayerName?.Invoke();
+        if (string.IsNullOrEmpty(full)) return false;
+        var display = full.Split('@')[0];
+        this.AddPlayer(full, display, bankroll, isVip, isFreeplay);
+        return true;
+    }
+
+    /// <summary>Set by the plugin: name@world of the current target (null if not a player).</summary>
+    public Func<string?>? GetTargetPlayerName { get; set; }
+
+    /// <summary>Set by the plugin: true when the dealer is in a party.</summary>
+    public Func<bool>? IsInParty { get; set; }
+
+    private void AnnounceRoundToParty(RoundResult result)
+    {
+        if (!this.config.AnnouncePartyResults) return;
+        if (this.IsInParty?.Invoke() != true) return;
+
+        _ = System.Threading.Tasks.Task.Delay(450).ContinueWith(_ =>
+        {
+            this.RunOnMainThread?.Invoke(() =>
+            {
+                try
+                {
+                    var number = Wheel.Display(result.Result);
+                    this.RunCommand?.Invoke($"/p Number {number} ({result.Color})!");
+                    var players = this.State?.Players;
+                    if (players == null || players.Count == 0) return;
+
+                    var parts = new System.Collections.Generic.List<string>();
+                    foreach (var p in players)
+                    {
+                        var net = p.LastRoundNet >= 0 ? $"+{p.LastRoundNet:N0}" : $"{p.LastRoundNet:N0}";
+                        parts.Add($"{p.DisplayName}: {p.Balance:N0} ({net})");
+                    }
+
+                    var line = "Balances — " + string.Join(" | ", parts);
+                    while (line.Length > 240)
+                    {
+                        var cut = line.LastIndexOf(" | ", 240, StringComparison.Ordinal);
+                        if (cut < 0) cut = Math.Min(240, line.Length);
+                        this.RunCommand?.Invoke($"/p {line[..cut]}");
+                        line = cut + 3 <= line.Length ? "Balances — " + line[(cut + 3)..] : string.Empty;
+                        if (line.Length <= "Balances — ".Length) return;
+                    }
+
+                    if (line.Length > 0) this.RunCommand?.Invoke($"/p {line}");
+                }
+                catch
+                {
+                    // party chat is best-effort
+                }
+            });
+        });
+    }
     /// <summary>Whispers the player their invite link via /tell.</summary>
     public void SendLink(PlayerState player)
     {
