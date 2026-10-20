@@ -35,6 +35,15 @@ jobs:
       - name: Build
         run: dotnet build PrivateRoulette.csproj --configuration Release --no-restore
 
+      - name: Verify manifest matches tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $manifestPath = "bin/Release/PrivateRoulette.json"
+          if (-not (Test-Path $manifestPath)) { throw "manifest not generated" }
+          $manifest = Get-Content $manifestPath | ConvertFrom-Json
+          if ($manifest.AssemblyVersion -ne $tag) { throw "manifest AssemblyVersion $($manifest.AssemblyVersion) does not match tag $tag" }
+
       - name: Locate package
         id: pkg
         shell: pwsh
