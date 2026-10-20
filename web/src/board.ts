@@ -194,6 +194,7 @@ export class Board {
 
     // per-cell edge zones for splits/streets/corners/six-lines
     this.buildCellEdges();
+    this.buildZeroEdges();
   }
 
   private cell(target: string, label: string, color: string | undefined, col: number, row: number, colSpan = 1, rowSpan = 1): HTMLElement {
@@ -225,9 +226,37 @@ export class Board {
     return el;
   }
 
-  /** Per-cell edge overlays: right edge = horizontal split, bottom edge =
-   *  vertical split (top/middle rows) or street (bottom row), bottom-right
-   *  corner = corner (top/middle rows) or six line (bottom row). */
+  /** Creates one visible line/dot target and its per-player chip stack. */
+  private addZone(cell: HTMLElement, target: string, title: string, css: Partial<CSSStyleDeclaration>, kind: string, withChip = true): void {
+    const z = document.createElement("div");
+    z.className = `cellzone ${kind}`;
+    z.title = title;
+    z.dataset.target = target;
+    Object.assign(z.style, { position: "absolute", pointerEvents: "auto" }, css as any);
+
+    if (withChip) {
+      const zchip = document.createElement("div");
+      zchip.className = "chipstack";
+      this.rootChipHosts(target, zchip);
+      z.appendChild(zchip);
+    }
+
+    z.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
+    });
+    z.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.cb.remove(target);
+    });
+    cell.appendChild(z);
+  }
+
+  /** Per-cell edge overlays: right edge = vertical split, bottom edge =
+   *  horizontal split (top/middle rows) or street (bottom row), bottom-right
+   *  corner = corner (top/middle rows) or six line (bottom row). The top row
+   *  gets mirrored street/six-line targets on its top edge for symmetry. */
   private buildCellEdges(): void {
     for (let row = 1; row <= 3; row++) {
       for (let col = 1; col <= 12; col++) {
@@ -235,63 +264,88 @@ export class Board {
         const cell = this.cells.get(`n-${n}`)!;
         cell.style.position = "relative";
 
-        const zone = (target: string, title: string, css: Partial<CSSStyleDeclaration>) => {
-          const z = document.createElement("div");
-          z.className = "cellzone";
-          z.title = title;
-          z.dataset.target = target;
-          Object.assign(z.style, { position: "absolute", pointerEvents: "auto" }, css as any);
-
-          const zchip = document.createElement("div");
-          zchip.className = "chipstack";
-          this.rootChipHosts(target, zchip);
-          z.appendChild(zchip);
-
-          z.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
-          });
-          z.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.cb.remove(target);
-          });
-          cell.appendChild(z);
-        };
-
         // right edge → split with n+3 (same row); centred on the MIDDLE of the gap
         if (col < 12) {
-          zone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
+          this.addZone(cell, `split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
             right: "-16px", top: "8px", bottom: "8px", width: "24px",
-          });
+          }, "zone-split-v");
+        }
+
+        // top row → the same street/six-line bets are also available above it
+        if (row === 1) {
+          // Mirrors are click targets only; the chip stays on the bottom line
+          // so a bet is never drawn twice.
+          this.addZone(cell, `street-${n - 2}-${n - 1}-${n}`, `Street ${n - 2}/${n - 1}/${n} (top)`, {
+            top: "-16px", left: "6px", right: "6px", height: "24px",
+          }, "zone-street zone-top", false);
+          if (col < 12) {
+            this.addZone(cell, `sixline-${n - 2}-${n - 1}-${n}-${n + 1}-${n + 2}-${n + 3}`, `Six line ${n - 2}-${n}/${n + 1}-${n + 3} (top)`, {
+              top: "-16px", right: "-16px", width: "24px", height: "24px",
+            }, "zone-sixline zone-top", false);
+          }
         }
 
         // bottom edge → vertical split (inside a column) or street/six line
         // on the bottom row
         if (row < 3) {
           // split with the number below (3/2 or 2/1)
-          zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
-            bottom: "-16px", left: "6px", right: col < 12 ? "6px" : "-16px", height: "24px",
-          });
+          this.addZone(cell, `split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
+            bottom: "-16px", left: "6px", right: "6px", height: "24px",
+          }, "zone-split-h");
           if (col < 12) {
-            zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
+            this.addZone(cell, `corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
               bottom: "-16px", right: "-16px", width: "24px", height: "24px",
-            });
+            }, "zone-corner");
           }
         } else {
           // bottom row: street under the column (1-2-3, 4-5-6, ...)
-          zone(`street-${n}-${n + 1}-${n + 2}`, `Street ${n}/${n + 1}/${n + 2}`, {
-            bottom: "-16px", left: "6px", right: col < 12 ? "6px" : "-16px", height: "24px",
-          });
+          this.addZone(cell, `street-${n}-${n + 1}-${n + 2}`, `Street ${n}/${n + 1}/${n + 2}`, {
+            bottom: "-16px", left: "6px", right: "6px", height: "24px",
+          }, "zone-street");
           if (col < 12) {
             // six line at the corner between this column and the next
-            zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 3}-${n + 4}-${n + 5}`, `Six line ${n}-${n + 2}/${n + 3}-${n + 5}`, {
+            this.addZone(cell, `sixline-${n}-${n + 1}-${n + 2}-${n + 3}-${n + 4}-${n + 5}`, `Six line ${n}-${n + 2}/${n + 3}-${n + 5}`, {
               bottom: "-16px", right: "-16px", width: "24px", height: "24px",
-            });
+            }, "zone-sixline");
           }
         }
       }
     }
+  }
+
+  /** Split/trio/first-four targets around the zero column. */
+  private buildZeroEdges(): void {
+    const z00 = this.cells.get("n-37");
+    const one = this.cells.get("n-1");
+    const two = this.cells.get("n-2");
+    const three = this.cells.get("n-3");
+    if (!z00 || !one || !two || !three) return;
+
+    // 00/0 split on the gap between the stacked zero cells
+    this.addZone(z00, "split-0-37", "Split 0/00", {
+      bottom: "-16px", left: "6px", right: "6px", height: "24px",
+    }, "zone-split-h");
+
+    // 0/1 and 00/3 splits on the zero column's right edge
+    this.addZone(one, "split-0-1", "Split 0/1", {
+      left: "-16px", top: "8px", bottom: "8px", width: "24px",
+    }, "zone-split-v");
+    this.addZone(three, "split-37-3", "Split 00/3", {
+      left: "-16px", top: "8px", bottom: "8px", width: "24px",
+    }, "zone-split-v");
+
+    // 0/1/2 and 00/2/3 trios at the junctions either side of the 2 cell
+    this.addZone(two, "street-0-1-2", "Trio 0/1/2", {
+      left: "-16px", bottom: "-16px", width: "24px", height: "24px",
+    }, "zone-corner");
+    this.addZone(two, "street-37-2-3", "Trio 00/2/3", {
+      left: "-16px", top: "-16px", width: "24px", height: "24px",
+    }, "zone-corner");
+
+    // first four (0/1/2/3) at the lower junction of 0 and 1
+    this.addZone(one, "corner-0-1-2-3", "First four 0/1/2/3", {
+      left: "-16px", bottom: "-16px", width: "24px", height: "24px",
+    }, "zone-corner");
   }
 }
 

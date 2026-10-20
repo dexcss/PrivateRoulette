@@ -182,10 +182,15 @@ the spin and flushes it in `revealRound()`.
 - **Roles**: player (bet UI), spectator (read-only board + aggregate chips),
   dealer (dealer bar + game list), demo (local player + NPCs).
 - **Board**: American layout; zeros stacked left; numbers 3..36 top row;
-  uniform six-box even-money row; TOP under the zeros. In-between zones are
-  per-cell overlays centered on the middle of the 8px grid gap (a 4px offset
-  from the cell edge). Zones are above cells (`z-index: 8`); avoid `filter`
-  on hover (stacking context clips chips).
+  uniform six-box even-money row; TOP under the zeros. In-between targets are
+  **visible gold lines/dots** drawn by `.cellzone::before` inside 24px per-cell
+  overlays centered on the middle of the 8px grid gap (a 4px offset from the
+  cell edge). The top row mirrors the street/six-line hit targets (chips stay
+  on the bottom line so a bet is not drawn twice). The zero column adds the
+  0/00 split, 0/1 and 00/3 splits, the 0-1-2 / 00-2-3 trios and first four
+  (0/1/2/3). Zones are above cells (`z-index: 8`); avoid `filter` on hover
+  (stacking context clips chips). The spin blocker is `z-index: 60` and renders
+  a gold-bordered box above every cell, line, dot and chip.
 - **Chips**: one `.pchip` per player per target, colored by the server's
   player color, stable order (own chips first, then player id), DOM reuse
   keyed by player id.

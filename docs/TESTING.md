@@ -34,6 +34,7 @@ live worker with the dealer token:
 | Script | Purpose |
 |---|---|
 | `pr_authcheck.mjs` | **0.8.0.0 security smoke:** dealer creates a game; a real player socket tries `get_stats`/`add_player`/`adjust_balance` (must be rejected), places a valid bet, floods 40 bets (31st must be rate-limited), dealer spins, results present, game deleted |
+| `pr_zerobets.mjs` | **zero multi-bet smoke:** places 0/00, 0/1, 00/3, 0-1-2, 00-2-3, first four and top line; manual spin 0; asserts the winning labels/payouts and that 00/3 and 00-2-3 lose |
 | `pr_e2e.mjs` | auth → create game → add player → place bets → spin → payout → stats → cashout |
 | `pr_limitcheck.mjs` | per-spot/total cap rejection, `round_result.results` payload |
 | `pr_vipcheck.mjs` | VIP toggle, 600k allowed as VIP, normal total rejected after UnVIP |
@@ -79,6 +80,19 @@ const a = document.querySelector('.cell[data-target="n-3"]').getBoundingClientRe
 const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRect();
 // zone center should be (a.right + b.left) / 2 (within ~1px)
 ```
+- Expected zone counts: 131 total — 35 vertical splits, 25 horizontal
+  splits, 25 corners, 24 streets, 22 six-lines. The top row adds 12 mirrored
+  street zones and 11 mirrored six-line zones (`.zone-top`); zero adds 6.
+- `getComputedStyle(zone, '::before')` should show a 2px gold line (or 8px dot)
+  with a radial/linear gradient, not a transparent box.
+- Top mirrors have **no `.chipstack`**: click `.zone-top[data-target="street-1-2-3"]`;
+  the bottom zone should get the chip and the top zone should keep 0 chips.
+- Zero targets to click/check: `split-0-37`, `split-0-1`, `split-37-3`,
+  `street-0-1-2`, `street-37-2-3`, `corner-0-1-2-3`; each should place a chip
+  and the demo/backend should settle it (see `pr_zerobets.mjs`).
+- During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
+  must render inside its dark/gold box, and the box must be above every
+  number, line, dot and chip (screenshot check).
 - Uniform outside row: the six even-money cells must have equal widths;
   dozens equal; number cells equal.
 - Corner chip: centered on the four-cell intersection, fully visible.
@@ -116,6 +130,13 @@ After tagging and the workflows finish:
       dozens/columns/even-money); limits reject correctly.
 - [ ] Spectator sees the board and aggregate chips; cannot bet.
 - [ ] Request spin + `/random` capture; wheel 28s on web and in-game.
+- [ ] Gold lines/dots between numbers are visible; clicking a line/dot places
+      the matching split/street/corner/six-line; top and bottom street/six-line
+      lines both work; the same street bet isn't drawn twice.
+- [ ] Zero multi-bets work: 0/00 split, 0/1 and 00/3 splits, 0-1-2 and
+      00-2-3 trios, first four, and the existing TOP line.
+- [ ] "Wheel is spinning…" appears in a box above all numbers/chips during the
+      spin, not behind them.
 - [ ] In-game wheel lands exactly, then idles without a post-settle jump;
       ball crawls the number track with tiny fret hops.
 - [ ] Plugin table-chat input posts to the web and the dealer web console chat

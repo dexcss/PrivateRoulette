@@ -86,6 +86,13 @@ sound toggle was removed, and the web demo imports the backend's payout table
 instead of duplicating it. The backend is on `v12`; the auth fix was verified
 by attacking it with a real player socket (all dealer events rejected).
 
+**Web board update (post-0.8.0.0):** every split/street/corner/six-line now
+has a visible gold line or dot hit target; top-row street/six-line mirrors are
+clickable (chips stay on the bottom line); the zero column supports 0/00,
+0/1 and 00/3 splits, 0-1-2 / 00-2-3 trios and first four; and the spin blocker
+is a `z-index: 60` gold-bordered box that covers every cell, line, dot and
+chip. Web-only deploy — the plugin/backend versions are unchanged.
+
 ## Known issues / next steps
 
 1. Trade partner matching is still heuristic (trade-window text → target →
