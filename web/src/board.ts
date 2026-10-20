@@ -1,11 +1,14 @@
-// Betting board: full European layout — numbers, splits, streets, corners,
-// six-lines, dozens, columns, first-four and even-money bets.
+// Betting board: full American layout — stacked 00/0 column, numbers, splits,
+// streets, corners, six lines, top line, dozens, columns, even-money bets.
+//
+// In-between (split/street/corner/six-line) zones are per-cell edge overlays,
+// so they always align with the cells regardless of layout or window size.
 // Left-click adds the selected chip, right-click (or shift-click) removes.
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
 function colorOf(n: number): string {
-  if (n === 0) return "#0f9d58";
+  if (n === 0 || n === 37) return "#0f9d58";
   return RED.has(n) ? "#c0392b" : "#1b1b1f";
 }
 
@@ -14,21 +17,11 @@ export interface BoardCallbacks {
   remove(target: string): void;
 }
 
-interface Cell {
-  target: string;
-  label: string;
-  color?: string;
-  col: number; // grid column (1-based)
-  row: number; // grid row (1-based)
-  colSpan?: number;
-  rowSpan?: number;
-}
-
 export class Board {
   private root: HTMLElement;
   private chipOnTarget = new Map<string, number>();
   private cells = new Map<string, HTMLElement>();
-  private zones = new Map<string, HTMLElement>();
+  private zoneChips = new Map<string, HTMLElement[]>();
   selectedChip = 10000;
   private cb: BoardCallbacks;
 
@@ -40,34 +33,26 @@ export class Board {
 
   /** Refresh chip stacks shown on the board from the server's bet map. */
   renderBets(bets: Record<string, number>): void {
-    for (const [target, el] of this.cells) {
-      const chipEl = el.querySelector(".chipstack") as HTMLElement | null;
-      const amt = bets[target] ?? 0;
-      if (chipEl) {
-        if (amt > 0) {
-          chipEl.textContent = formatGil(amt);
-          chipEl.style.display = "flex";
-        } else {
-          chipEl.style.display = "none";
-        }
+    const update = (el: HTMLElement | undefined, amt: number) => {
+      const chipEl = el?.querySelector(".chipstack") as HTMLElement | null;
+      if (!chipEl) return;
+      if (amt > 0) {
+        chipEl.textContent = formatGil(amt);
+        chipEl.style.display = "flex";
+      } else {
+        chipEl.style.display = "none";
       }
-    }
-    for (const [target, el] of this.zones) {
-      const chipEl = el.querySelector(".chipstack") as HTMLElement | null;
-      const amt = bets[target] ?? 0;
-      if (chipEl) {
-        chipEl.textContent = amt > 0 ? formatGil(amt) : "";
-        chipEl.style.display = amt > 0 ? "flex" : "none";
-      }
-    }
+    };
+
+    for (const [target, el] of this.cells) update(el, bets[target] ?? 0);
+    for (const [target, els] of this.zoneChips) for (const el of els) update(el, bets[target] ?? 0);
+
     this.chipOnTarget = new Map(Object.entries(bets));
   }
 
   private build(): void {
     this.root.innerHTML = "";
-    // grid: col 1 = zero column (00 stacked over 0), cols 2..13 = numbers,
-    // col 14 = column bets ("2 to 1")
-    // rows: 1..3 numbers (top row is 3-6-9...), row 4 = dozens, row 5 = even-money
+    // grid: col 1 = zero column (00/0), cols 2..13 = numbers, col 14 = column bets
     this.root.style.display = "grid";
     this.root.style.gridTemplateColumns = "minmax(46px,0.75fr) repeat(12, 1fr) minmax(38px,0.55fr)";
     this.root.style.gridTemplateRows = "repeat(3, 1fr) 0.8fr 0.8fr";
@@ -142,10 +127,10 @@ export class Board {
 
     // top line under the zeros
     const tl = this.cell("topline", "TOP", "#20242c", 1, 4, 1);
-    tl.title = "Top line (6:1)";
+    tl.title = "Top line 0-00-1-2-3 (6:1)";
 
-    // line-click zones for splits/streets/corners/sixlines overlay
-    this.buildGutterZones();
+    // per-cell edge zones for splits/streets/corners/six-lines
+    this.buildCellEdges();
   }
 
   private cell(target: string, label: string, color: string | undefined, col: number, row: number, colSpan = 1, rowSpan = 1): HTMLElement {
@@ -167,8 +152,7 @@ export class Board {
     el.appendChild(chip);
 
     el.addEventListener("click", (e) => {
-      if (e.shiftKey) this.cb.remove(target);
-      else this.cb.place(target);
+      if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
     });
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
@@ -180,123 +164,77 @@ export class Board {
     return el;
   }
 
-  /**
-   * Overlay invisible hit zones in the gutters between number cells:
-   * vertical gutter → split, horizontal gutter → street (of 3), intersection → corner.
-   * Implemented with a single absolutely-positioned layer using pixel math on the grid.
-   */
-  private buildGutterZones(): void {
-    const layer = document.createElement("div");
-    layer.className = "gutters";
-    layer.style.position = "absolute";
-    layer.style.inset = "0";
-    layer.style.pointerEvents = "none";
-    this.root.style.position = "relative";
-    this.root.appendChild(layer);
-
-    const zones: { el: HTMLDivElement }[] = [];
-
-    const mkZone = (target: string, title: string): HTMLDivElement => {
-      const z = document.createElement("div");
-      z.title = title;
-      z.dataset.target = target;
-      z.style.position = "absolute";
-      z.style.pointerEvents = "auto";
-      z.style.background = "transparent";
-      z.addEventListener("mouseenter", () => (z.style.background = "rgba(201,162,39,0.45)"));
-      z.addEventListener("mouseleave", () => (z.style.background = "transparent"));
-      const zchip = document.createElement("div");
-      zchip.className = "chipstack gutter-chip";
-      zchip.style.display = "none";
-      z.appendChild(zchip);
-      this.zones.set(target, z);
-      z.addEventListener("click", (e) => {
-        if (e.shiftKey) this.cb.remove(target);
-        else this.cb.place(target);
-      });
-      z.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        this.cb.remove(target);
-      });
-      layer.appendChild(z);
-      zones.push({ el: z });
-      return z;
-    };
-
-    // compute after layout
-    requestAnimationFrame(() => {
-      const rootRect = this.root.getBoundingClientRect();
-      const numberCells: { n: number; r: DOMRect }[] = [];
-      for (let row = 1; row <= 3; row++) {
-        for (let col = 1; col <= 12; col++) {
-          const n = col * 3 - (row - 1);
-          const el = this.cells.get(`n-${n}`)!;
-          numberCells.push({ n, r: el.getBoundingClientRect() });
-        }
-      }
-      const byPos = new Map(numberCells.map((c) => [`${c.r.left.toFixed(1)}_${c.r.top.toFixed(1)}`, c]));
-      const findCell = (left: number, top: number) => byPos.get(`${left.toFixed(1)}_${top.toFixed(1)}`);
-      const gap = 3;
-
-      for (const { n, r } of numberCells) {
-        const w = r.width;
-        const h = r.height;
-        const rowOf = (n: number) => 3 - (((n - 1) % 3)); // 3..1 top→bottom => top row n%3==0
-        // vertical gutter to the right neighbor (same visual row): n and n+3 → split
-        const right = findCell(r.left + w + gap, r.top);
-        if (right && right.n === n + 3) {
-          const z = mkZone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`);
-          z.style.left = `${r.left - rootRect.left + w}px`;
-          z.style.top = `${r.top - rootRect.top}px`;
-          z.style.width = `${gap}px`;
-          z.style.height = `${h}px`;
-        }
-        // horizontal gutter below: n and n-1 (row below has n-1 when same column)
-        const below = findCell(r.left, r.top + h + gap);
-        if (below && below.n === n - 1) {
-          // street when n is the top of a column-of-3 (n % 3 == 0): covers n, n-1, n-2
-          if (n % 3 === 0) {
-            const z = mkZone(`street-${n}-${n - 1}-${n - 2}`, `Street ${n}-${n - 2}`);
-            z.style.left = `${r.left - rootRect.left}px`;
-            z.style.top = `${r.top - rootRect.top + h}px`;
-            z.style.width = `${w}px`;
-            z.style.height = `${gap}px`;
-          } else {
-            const z = mkZone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`);
-            z.style.left = `${r.left - rootRect.left}px`;
-            z.style.top = `${r.top - rootRect.top + h}px`;
-            z.style.width = `${w}px`;
-            z.style.height = `${gap}px`;
-          }
-          // corner between 4 cells (needs both a right neighbor and a below neighbor)
-          const belowRight = findCell(r.left + w + gap, r.top + h + gap);
-          if (below && belowRight && belowRight.n === n - 1 + 3) {
-            const z = mkZone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n+3}/${n-1}/${n+2}`);
-            z.style.left = `${r.left - rootRect.left + w}px`;
-            z.style.top = `${r.top - rootRect.top + h}px`;
-            z.style.width = `${gap}px`;
-            z.style.height = `${gap}px`;
-          }
-        }
-      }
-
-      // six lines: gutter at the bottom edge of the number grid between columns
+  /** Per-cell edge overlays: right edge = split with the next column,
+   *  bottom edge = street/split, bottom-right corner point = corner,
+   *  bottom edge of the bottom row = six line. Always aligned, no pixel math. */
+  private buildCellEdges(): void {
+    for (let row = 1; row <= 3; row++) {
       for (let col = 1; col <= 12; col++) {
-        const topCell = numberCells.find((c) => c.n === col * 3);
-        if (!topCell) continue;
-        const bottomRowTop = topCell.r.top + 2 * (topCell.r.height + gap);
-        const z = mkZone(`sixline-${col * 3}-${col * 3 + 1}-${col * 3 + 2}-${col * 3 - 1}-${col * 3 - 2}-${col * 3 - 3}`, `Six line ${col * 3 - 2}-${col * 3 + 1}`);
-        z.style.left = `${topCell.r.left - rootRect.left}px`;
-        z.style.top = `${bottomRowTop + topCell.r.height}px`;
-        z.style.width = `${topCell.r.width}px`;
-        z.style.height = `${gap}px`;
+        const n = col * 3 - (row - 1);
+        const cell = this.cells.get(`n-${n}`)!;
+        cell.style.position = "relative";
+
+        const zone = (target: string, title: string, css: Partial<CSSStyleDeclaration>) => {
+          const z = document.createElement("div");
+          z.className = "cellzone";
+          z.title = title;
+          z.dataset.target = target;
+          Object.assign(z.style, { position: "absolute", pointerEvents: "auto" }, css as any);
+
+          const zchip = document.createElement("div");
+          zchip.className = "chipstack zone-chip";
+          zchip.style.display = "none";
+          z.appendChild(zchip);
+          const list = this.zoneChips.get(target) ?? [];
+          list.push(zchip);
+          this.zoneChips.set(target, list);
+
+          z.addEventListener("click", (e) => {
+            if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
+          });
+          z.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            this.cb.remove(target);
+          });
+          cell.appendChild(z);
+        };
+
+        // right edge → split with n+3 (same row)
+        if (col < 12) {
+          zone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
+            right: "-5px", top: "3px", bottom: "3px", width: "10px",
+          });
+        }
+
+        // bottom edge → split/street + (row 1/2) corner + (row 3) six line
+        if (row < 3) {
+          if (row === 1) {
+            zone(`street-${n}-${n - 1}-${n - 2}`, `Street ${n}/${n - 1}/${n - 2}`, {
+              bottom: "-5px", left: "4px", right: col < 12 ? "4px" : "-5px", height: "10px",
+            });
+          } else {
+            zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
+              bottom: "-5px", left: "4px", right: col < 12 ? "4px" : "-5px", height: "10px",
+            });
+          }
+          if (col < 12) {
+            zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
+              bottom: "-5px", right: "-5px", width: "10px", height: "10px",
+            });
+          }
+        } else if (col < 12) {
+          // bottom row: six line spanning this column and the next
+          zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 12}-${n + 13}-${n + 14}`, `Six line ${n}-${n + 2}/${n + 12}-${n + 14}`, {
+            bottom: "-5px", left: "4px", right: "4px", height: "10px",
+          });
+        }
       }
-    });
+    }
   }
 }
 
 function formatGil(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}m`;
-  if (n >= 10_000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
+  if (n >= 10_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}k`;
   return String(n);
 }
