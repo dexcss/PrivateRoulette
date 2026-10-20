@@ -38,7 +38,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Work items marshalled from socket threads onto the framework thread.</summary>
     private readonly ConcurrentQueue<Action> mainThreadQueue = new();
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState, IAddonLifecycle addonLifecycle, IGameGui gameGui, ITargetManager targetManager, IPartyList partyList, ISigScanner sigScanner)
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState, IAddonLifecycle addonLifecycle, IGameGui gameGui, ITargetManager targetManager, IPartyList partyList)
     {
         this.pluginInterface = pluginInterface;
         this.commandManager = commandManager;
@@ -56,12 +56,7 @@ public sealed class Plugin : IDalamudPlugin
         this.session.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.socket.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.session.RunCommand = cmd => this.commandManager.ProcessCommand(cmd);
-        var chatSender = new ChatSender(sigScanner, log);
-        this.session.SendChatText = msg =>
-        {
-            if (!chatSender.Send(msg))
-                this.commandManager.ProcessCommand(msg);
-        };
+this.session.SendChatText = msg => this.commandManager.ProcessCommand(msg);
         this.session.IsInParty = () => partyList.Length > 0;
         this.session.GetTargetPlayerName = () =>
         {
