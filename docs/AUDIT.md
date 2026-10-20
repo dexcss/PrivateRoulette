@@ -10,12 +10,12 @@ deployed Pages site.
 |---|---|
 | Plugin source version | `0.8.0.0` (`PrivateRoulette.csproj`) |
 | Per-plugin repo manifest | `0.8.0.0` (`repo.json`) |
-| Latest GitHub release | `v0.8.0.0` (remediation build) |
+| Latest GitHub release | `v0.8.0.0` — 2026-10-20T05:48:39Z (asset + DLL verified) |
 | Latest tag | `v0.8.0.0` (plus `backup-pre-revamp`) |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
-| Combined repo | PrivateRoulette `0.8.0.0` |
-| Pages JS asset | deployed from `main` (hash changes per build) |
-| Working tree | docs/version update committed before the release |
+| Combined repo | PrivateRoulette `0.8.0.0` (GitHub API; raw CDN may lag ~5 min) |
+| Pages JS asset | `assets/index-BCQkavbT.js` |
+| Working tree | clean |
 | Web demo | live (`#/demo`, playable, shared payout table) |
 
 ## 2. Component inventory
@@ -110,8 +110,10 @@ deployed Pages site.
   errors.
 - **Dealer page**: `#/dealer/{game}/{token}` auto-logs in, strips the token
   from the URL, opens the game table.
-- **Deploy**: release zip manifest/assembly match the tag; combined repo
-  version matches; Pages assets updated; worker `/health` version matches.
+- **Deploy (0.8.0.0)**: CI release succeeded (manifest/assembly both
+  `0.8.0.0`, release published 05:48Z); the combined repo API serves
+  `0.8.0.0`; the Pages asset changed to `index-BCQkavbT.js` and the live demo
+  loads; worker `/health` reports `v12`.
 
 ## 5. Findings
 
