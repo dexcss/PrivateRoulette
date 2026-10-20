@@ -206,7 +206,7 @@ export class Wheel {
 
     const rel = s.ballFrom + (s.ballTo - s.ballFrom) * this.sampleProgress(s.ballProgress, tBall) + this.settleWobble(tBall);
     this.ballAngle = this.wheelAngle + rel;
-    this.ballRadiusFactor = this.radialAt(this.ballSpeedAt());
+    this.ballRadiusFactor = this.ballRadiusAt(tBall);
 
     // fret ticks — the ball crosses pockets; spacing naturally widens as it slows
     const nowMs = performance.now();
@@ -229,16 +229,17 @@ export class Wheel {
     return SLOT * 0.24 * envelope * Math.sin(u * Math.PI * 7);
   }
 
-  /** The ball spirals inward as it loses speed, like a real ball falling off
-   *  the track against the bowl wall: fast = high on the outer rim, slow =
-   *  down in the pocket well. Radius is a direct function of the simulated
-   *  speed, so the inward drift is physics-shaped rather than timed. */
-  private radialAt(speed: number): number {
-    const rOut = this.RIM_RADIUS;
-    const rIn = this.REST_RADIUS;
-    if (speed >= 0.42) return rOut;
-    const u = Math.min(1, (0.42 - speed) / 0.42);
-    return rOut + (rIn - rOut) * this.smoothstep(u);
+  /** Ball height through the spin: races on the outer track, moves down onto
+   *  the numbers and rattles there for a long while, then drops into the
+   *  winning pocket with a soft hop. */
+  private ballRadiusAt(t: number): number {
+    const track = 0.862; // riding over the number ring
+    if (t < 0.42) return this.RIM_RADIUS;
+    if (t < 0.5) return this.RIM_RADIUS + (track - this.RIM_RADIUS) * this.smoothstep((t - 0.42) / 0.08);
+    if (t < 0.9) return track;
+    if (t < 0.96) return track + (this.REST_RADIUS - track) * this.smoothstep((t - 0.9) / 0.06);
+    const u = (t - 0.96) / 0.04;
+    return this.REST_RADIUS + 0.025 * Math.sin(Math.min(1, u) * Math.PI) * (1 - u);
   }
 
   private faceCache: HTMLCanvasElement | null = null;
@@ -249,7 +250,6 @@ export class Wheel {
     const size = parseFloat(this.canvas.style.width);
     const c = size / 2;
     const R = c - 6;
-    const SQUASH = 0.62; // vertical foreshortening: the camera looks down at the wheel
 
     ctx.clearRect(0, 0, size, size);
 
@@ -262,23 +262,18 @@ export class Wheel {
 
     // soft floor shadow
     ctx.beginPath();
-    ctx.ellipse(c, c + R * SQUASH * 0.16, R * 1.03, R * SQUASH * 0.98, 0, 0, TAU);
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.ellipse(c, c + R * 0.07, R * 0.99, R * 0.95, 0, 0, TAU);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fill();
 
-    // ---- tilted wheel group (foreshortened ellipse) ----
-    ctx.save();
-    ctx.translate(c, c);
-    ctx.scale(1, SQUASH);
-    ctx.translate(-c, -c);
-
+    // rotated face
     ctx.save();
     ctx.translate(c, c);
     ctx.rotate(this.wheelAngle);
     ctx.drawImage(this.faceCache, -size / 2, -size / 2, size, size);
     ctx.restore();
 
-    // fixed lighting overlay (does not rotate with the wheel)
+    // ---- fixed lighting overlay (does not rotate with the wheel) ----
     const gloss = ctx.createRadialGradient(c - R * 0.42, c - R * 0.42, R * 0.06, c, c, R * 1.02);
     gloss.addColorStop(0, "rgba(255,255,255,0.16)");
     gloss.addColorStop(0.32, "rgba(255,255,255,0.06)");
@@ -289,35 +284,10 @@ export class Wheel {
     ctx.fillStyle = gloss;
     ctx.fill();
 
-    // winning pocket pulse
-    if (!this.spin && this.lastResult >= 0 && performance.now() - this.settleTime < 2600) {
-      const idx = ORDER.indexOf(this.lastResult);
-      const a0 = this.wheelAngle + idx * SLOT - SLOT / 2 - Math.PI / 2;
-      const pulse = 1 + 0.08 * Math.sin((performance.now() - this.settleTime) / 120);
-      ctx.beginPath();
-      ctx.arc(c, c, R * 0.875 * pulse, a0, a0 + SLOT);
-      ctx.arc(c, c, R * 0.46, a0 + SLOT, a0, true);
-      ctx.closePath();
-      ctx.strokeStyle = `rgba(255,235,170,${(0.9 * (1 - (performance.now() - this.settleTime) / 2600)).toFixed(3)})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
+    const pocketOuter = R * 0.875;
+    const pocketInner = R * 0.46;
 
-    ctx.restore();
-
-    // ---- bowl lip: the wall of the tilted wheel (screen space) ----
-    ctx.beginPath();
-    ctx.ellipse(c, c, R, R * SQUASH, 0, -0.1 * Math.PI, 1.1 * Math.PI);
-    ctx.strokeStyle = "#2b1809";
-    ctx.lineWidth = R * 0.085;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(c, c, R + R * 0.04, R * SQUASH + R * 0.04 * SQUASH, 0, -0.1 * Math.PI, 1.1 * Math.PI);
-    ctx.strokeStyle = "rgba(255,224,168,0.22)";
-    ctx.lineWidth = R * 0.012;
-    ctx.stroke();
-
-    // ---- ball (screen space; grows as it comes toward the camera) ----
+    // ---- ball ----
     let ballR: number;
     let ballA: number;
     if (this.spin) {
@@ -327,19 +297,17 @@ export class Wheel {
       ballR = R * this.REST_RADIUS;
       ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT - Math.PI / 2 : Math.PI);
     }
-
-    // fret hop: the ball lifts and kicks outward briefly as it crosses a fret
+    // fret hop: the ball lifts and kicks outward briefly each time it crosses
+    // a fret, like it's bouncing over the diamond
     let hop = 0;
     if (this.spin) {
       const age = performance.now() - this.hopStart;
       if (age >= 0 && age < 170) hop = Math.sin((Math.PI * age) / 170);
     }
-    const hopR = ballR * (1 + 0.05 * hop);
-    const bx = c + Math.cos(ballA) * hopR;
-    const by = c + Math.sin(ballA) * hopR * SQUASH;
-    // bottom of the ellipse is nearest the camera, so the ball is bigger there
-    const depth = 0.84 + 0.26 * (Math.sin(ballA) + 1) / 2;
-    const br = Math.max(5, R * 0.033) * depth;
+    const hopLift = 0.05 * hop;
+    const bx = c + Math.cos(ballA) * ballR * (1 + hopLift);
+    const by = c + Math.sin(ballA) * ballR * (1 + hopLift);
+    const br = Math.max(5, R * 0.033);
     const ballDrawR = br * (1 + 0.15 * hop);
 
     // motion streak while the ball is still travelling fast
@@ -362,7 +330,7 @@ export class Wheel {
     // ball shadow (separates and shrinks while the ball is airborne)
     const shadowScale = 1 - 0.32 * hop;
     ctx.beginPath();
-    ctx.ellipse(bx + br * (0.28 + 0.3 * hop), by + br * (0.42 + 0.24 * hop), br * 0.92 * shadowScale, br * 0.6 * shadowScale, 0, 0, TAU);
+    ctx.ellipse(bx + br * (0.28 + 0.3 * hop), by + br * (0.4 + 0.24 * hop), br * 0.92 * shadowScale, br * 0.62 * shadowScale, 0, 0, TAU);
     ctx.fillStyle = `rgba(0,0,0,${(0.5 - 0.15 * hop).toFixed(3)})`;
     ctx.fill();
 
@@ -386,12 +354,26 @@ export class Wheel {
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fill();
 
-    // result plate (screen space so the text stays crisp)
+    // winning pocket pulse
+    if (!this.spin && this.lastResult >= 0 && performance.now() - this.settleTime < 2600) {
+      const idx = ORDER.indexOf(this.lastResult);
+      const a0 = this.wheelAngle + idx * SLOT - SLOT / 2 - Math.PI / 2;
+      const pulse = 1 + 0.08 * Math.sin((performance.now() - this.settleTime) / 120);
+      ctx.beginPath();
+      ctx.arc(c, c, pocketOuter * pulse, a0, a0 + SLOT);
+      ctx.arc(c, c, pocketInner, a0 + SLOT, a0, true);
+      ctx.closePath();
+      ctx.strokeStyle = `rgba(255,235,170,${(0.9 * (1 - (performance.now() - this.settleTime) / 2600)).toFixed(3)})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // result plate
     if (!this.spin && this.lastResult >= 0) {
-      const plateW = R * 0.36;
-      const plateH = R * 0.16;
+      const plateW = R * 0.34;
+      const plateH = R * 0.17;
       const px = c - plateW / 2;
-      const py = c + R * SQUASH * 0.52 - plateH / 2;
+      const py = c + R * 0.28;
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.6)";
       ctx.shadowBlur = 12;
