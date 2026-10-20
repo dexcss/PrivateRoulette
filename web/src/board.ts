@@ -19,6 +19,7 @@ export interface BetChip {
   target: string;
   amount: number;
   color: string;
+  playerId?: string;
   name?: string;
   mine?: boolean;
 }
@@ -53,18 +54,43 @@ export class Board {
 
     for (const [target, hosts] of this.chipHosts) {
       const list = byTarget.get(target) ?? [];
-      list.sort((a, b) => Number(!!b.mine) - Number(!!a.mine) || b.amount - a.amount);
+      // Stable order: your chips first, then by player id. Amounts changing
+      // never reorder the stacks, so chips don't jump around while betting.
+      list.sort(
+        (a, b) =>
+          Number(!!b.mine) - Number(!!a.mine) ||
+          (a.playerId ?? a.name ?? "").localeCompare(b.playerId ?? b.name ?? ""),
+      );
+
       for (const host of hosts) {
-        host.innerHTML = "";
+        const existing = new Map<string, HTMLElement>();
+        for (const child of Array.from(host.children) as HTMLElement[]) {
+          const key = child.dataset.player;
+          if (key) existing.set(key, child);
+        }
+
         for (const chip of list) {
-          const el = document.createElement("div");
-          el.className = "pchip" + (chip.mine ? " mine" : "");
+          const key = chip.playerId ?? chip.name ?? chip.color;
+          let el = existing.get(key);
+          if (el) {
+            existing.delete(key);
+            host.appendChild(el); // move into the stable order
+          } else {
+            el = document.createElement("div");
+            el.className = "pchip new";
+            el.dataset.player = key;
+            host.appendChild(el);
+          }
+
+          el.classList.toggle("mine", !!chip.mine);
           el.style.setProperty("--chip", chip.color);
           el.style.color = textOn(chip.color);
-          el.textContent = formatGil(chip.amount);
+          const text = formatGil(chip.amount);
+          if (el.textContent !== text) el.textContent = text;
           el.title = `${chip.name ?? "Player"}: ${chip.amount.toLocaleString()} gil`;
-          host.appendChild(el);
         }
+
+        for (const leftover of existing.values()) leftover.remove();
       }
     }
   }

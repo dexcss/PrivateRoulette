@@ -43,6 +43,12 @@ let rejoinBets: Record<string, number> | null = null;
 let prevBalance = 0;
 let pendingRound: any = null;
 let lastPlayers: PublicPlayer[] = [];
+type PendingBet =
+  | { kind: "place"; target: string; amount: number; expected: number }
+  | { kind: "remove"; target: string };
+let serverMyBets: Record<string, number> = {};
+let pendingBets: PendingBet[] = [];
+let renderQueued = false;
 let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
 let dealerGames: any[] = [];
 let lastLedger: any = null;
@@ -81,12 +87,20 @@ const dealerBar = $("#dealer-bar");
 
 // ---------- landing ----------
 
-function parseHash(): { gameId: string; playerKey: string; spectate: boolean; dealer?: boolean } | null {
-  // #/{gameId}/{playerKey}  |  #/spectate/{gameId}  |  #/dealer/{gameId}
+function parseHash(): { gameId: string; playerKey: string; spectate: boolean; dealer?: boolean; dealerToken?: string } | null {
+  // #/{gameId}/{playerKey}  |  #/spectate/{gameId}  |  #/dealer/{gameId}/{token}
   const h = location.hash.replace(/^#\/?/, "");
   if (!h) return null;
   const parts = h.split("/").map(decodeURIComponent);
-  if (parts[0] === "dealer") return { gameId: parts[1] ?? "", playerKey: "", spectate: false, dealer: true };
+  if (parts[0] === "dealer") {
+    return {
+      gameId: parts[1] && parts[1] !== "-" ? parts[1] : "",
+      playerKey: "",
+      spectate: false,
+      dealer: true,
+      dealerToken: parts[2] || undefined,
+    };
+  }
   if (parts[0] === "spectate" && parts[1]) return { gameId: parts[1], playerKey: "", spectate: true };
   if (parts.length >= 2) return { gameId: parts[0], playerKey: parts[1], spectate: false };
   return null;
@@ -145,6 +159,8 @@ api.onOpen(() => {
 });
 
 api.onClose(() => {
+  pendingBets = [];
+  queueRender();
   statusLabel.textContent = "disconnected — retrying…";
 });
 
@@ -192,15 +208,24 @@ api.on("game_state", (d: GameStateMsg) => {
   for (const p of ((d as any).players ?? []) as any[]) {
     if (p?.id && p?.player_key) playerKeys.set(p.id, p.player_key);
   }
-  if (board && d.players?.length) board.renderBets(betChips(d.players));
+  lastPlayers = d.players ?? [];
+  const mine = me ? lastPlayers.find((p) => p.id === me!.playerId) : undefined;
+  if (mine) {
+    serverMyBets = mine.bets ?? {};
+    pendingBets = [];
+  }
+  queueRender();
   renderState();
 });
 
 api.on("public_bets", (d: PublicBetsMsg) => {
   lastPlayers = d.players;
-  renderPlayers(d.players);
-  if (board) board.renderBets(betChips(d.players));
-  if (me) renderBalance(d.players);
+  const mine = me ? d.players.find((p) => p.id === me!.playerId) : undefined;
+  if (mine) {
+    serverMyBets = mine.bets ?? {};
+    reconcilePending(serverMyBets);
+  }
+  queueRender();
 });
 
 api.on("table_history", (d: { history: HistoryEntry[] }) => {
@@ -256,10 +281,10 @@ function revealRound(): void {
 }
 
 api.on("bets_updated", (d: { bets: Record<string, number> }) => {
-  if (!me || !board) return;
-  const p = lastPlayers.find((x) => x.id === me!.playerId);
-  if (p) p.bets = d.bets ?? {};
-  board.renderBets(betChips(lastPlayers));
+  if (!me) return;
+  serverMyBets = d.bets ?? {};
+  reconcilePending(serverMyBets);
+  queueRender();
 });
 
 api.on("cashout_ok", () => {
@@ -268,6 +293,10 @@ api.on("cashout_ok", () => {
 
 api.on("dealer_error", (d) => {
   sfx.error();
+  if (pendingBets.length > 0) {
+    pendingBets = [];
+    queueRender();
+  }
   statusLabel.textContent = d.message ?? "error";
   setTimeout(() => {
     if (statusLabel.textContent === d.message) statusLabel.textContent = "";
@@ -375,6 +404,7 @@ function betChips(players: PublicPlayer[]): BetChip[] {
           target,
           amount,
           color: p.color,
+          playerId: p.id,
           name: p.display_name,
           mine: !!me && p.id === me.playerId,
         });
@@ -382,6 +412,43 @@ function betChips(players: PublicPlayer[]): BetChip[] {
     }
   }
   return out;
+}
+
+function mergedMyBets(): Record<string, number> {
+  const out = { ...serverMyBets };
+  for (const op of pendingBets) {
+    if (op.kind === "place") out[op.target] = (out[op.target] ?? 0) + op.amount;
+    else delete out[op.target];
+  }
+  return out;
+}
+
+/** The server's player list with this player's optimistic bets overlaid. */
+function withMyBets(players: PublicPlayer[]): PublicPlayer[] {
+  if (!me) return players;
+  const merged = mergedMyBets();
+  return players.map((p) => (p.id === me!.playerId ? { ...p, bets: merged } : p));
+}
+
+/** Drop optimistic operations the server has already reflected. */
+function reconcilePending(server: Record<string, number>): void {
+  pendingBets = pendingBets.filter((op) => {
+    if (op.kind === "place") return (server[op.target] ?? 0) < op.expected;
+    return op.target in server;
+  });
+}
+
+/** Coalesce all board/list/balance updates into one render per frame. */
+function queueRender(): void {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    const players = withMyBets(lastPlayers);
+    board?.renderBets(betChips(players));
+    renderPlayers(players);
+    renderBalance(players);
+  });
 }
 
 function renderBalance(players: PublicPlayer[], force = false) {
@@ -703,12 +770,17 @@ wheel.setTickCallback(() => sfx.tick());
 wheel.setSettleCallback(() => { sfx.land(); revealRound(); });
 board = new Board(boardEl, {
   place: (target) => {
-    if (role !== "player") return;
+    if (role !== "player" || !me) return;
     sfx.chip();
+    const base = mergedMyBets()[target] ?? 0;
+    pendingBets.push({ kind: "place", target, amount: selectedChip, expected: base + selectedChip });
+    queueRender();
     api.send("place_bet", { target, amount: selectedChip });
   },
   remove: (target) => {
-    if (role !== "player") return;
+    if (role !== "player" || !me) return;
+    pendingBets.push({ kind: "remove", target });
+    queueRender();
     api.send("remove_bet", { target });
   },
 });
@@ -719,6 +791,13 @@ if (auto) {
     role = "dealer";
     gameId = auto.gameId ?? "";
     playerKey = "";
+    if (auto.dealerToken) {
+      // Auto-login from the plugin button, then remove the secret from the URL.
+      dealerToken = auto.dealerToken;
+      localStorage.setItem("pr_dealer_token", dealerToken);
+      const clean = `#/dealer/${gameId || ""}`.replace(/\/$/, "");
+      history.replaceState(null, "", `${location.pathname}${location.search}${clean}`);
+    }
     if (gameId) ($("#join-game") as HTMLInputElement).value = gameId;
     if (dealerToken) {
       api.connect();

@@ -400,10 +400,18 @@ public sealed class RouletteSession : IDisposable
     public string? PlayerLink(PlayerState player)
         => player.PlayerKey == null ? null : $"https://dexcss.github.io/PrivateRoulette/#/{this.GameId}/{player.PlayerKey}";
 
-    /// <summary>Dealer web console link for the current game (copied from the plugin UI).</summary>
-    public string DealerWebUrl => this.GameId == null
-        ? "https://dexcss.github.io/PrivateRoulette/#/dealer"
-        : $"https://dexcss.github.io/PrivateRoulette/#/dealer/{this.GameId}";
+    /// <summary>Dealer web console link for the current game, with the token auto-filled.</summary>
+    public string DealerWebUrl
+    {
+        get
+        {
+            var game = string.IsNullOrEmpty(this.GameId) ? "-" : this.GameId;
+            var token = this.config.DealerToken;
+            return string.IsNullOrWhiteSpace(token)
+                ? $"https://dexcss.github.io/PrivateRoulette/#/dealer/{game}"
+                : $"https://dexcss.github.io/PrivateRoulette/#/dealer/{game}/{Uri.EscapeDataString(token)}";
+        }
+    }
 
     public void Dispose()
     {

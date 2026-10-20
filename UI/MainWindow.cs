@@ -204,13 +204,12 @@ public sealed class MainWindow : Window
 
     private void DrawGameHeaderButtons()
     {
-        if (ImGui.Button("Copy dealer page"))
+        if (ImGui.Button("Open dealer page"))
         {
-            ImGui.SetClipboardText(this.session.DealerWebUrl);
-            this.session.Echo("Dealer page copied to clipboard.");
+            OpenUrl(this.session.DealerWebUrl);
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Copy the dealer web console link for this game.");
+            ImGui.SetTooltip("Open the dealer web console in your browser (auto-login with your dealer token).");
         ImGui.SameLine();
         if (ImGui.Button("Open spectator page"))
             OpenUrl($"https://dexcss.github.io/PrivateRoulette/#/spectate/{this.session.GameId}");
