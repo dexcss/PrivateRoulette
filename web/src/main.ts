@@ -2,6 +2,9 @@ import { Api, colorOf, displayNumber, GameStateMsg, HistoryEntry, MeState, Publi
 import { Wheel } from "./wheel";
 import { Sfx } from "./audio";
 import { Board, type BetChip } from "./board";
+// Single source of truth for payouts/bet labels: the backend's fairness module.
+// The demo runs locally but settles with exactly the same table.
+import { describeBetTarget, isInsideBet, payoutMultiplierForTarget } from "../../server/src/fairness";
 
 // ---------- settings ----------
 
@@ -60,7 +63,6 @@ let demoMode = false;
 
 const DEMO_BANKROLL = 1_000_000;
 const DEMO_WINDOW_MS = 20000;
-const DEMO_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 let demoBalance = DEMO_BANKROLL;
 let demoPhase: "betting" | "spinning" = "betting";
 let demoSpinAt = 0;
@@ -590,6 +592,7 @@ $("#chat-form").addEventListener("submit", (e) => {
   const text = chatInput.value.trim();
   if (!text) return;
   if (role === "player") api.send("send_player_chat", { text });
+  else if (role === "dealer") api.send("send_chat", { text });
   chatInput.value = "";
 });
 
@@ -901,90 +904,13 @@ if (auto) {
 
 // ---------- demo mode: a fully playable, self-contained game (no backend) ----------
 
-function demoColor(n: number): string {
-  if (n === 0 || n === 37) return "green";
-  return DEMO_RED.has(n) ? "red" : "black";
-}
-
-function demoInside(target: string): boolean {
-  return (
-    target.startsWith("n-") || target.startsWith("split-") || target.startsWith("street-") ||
-    target.startsWith("corner-") || target.startsWith("sixline-") ||
-    target === "topline" || target === "firstfour"
-  );
-}
-
-/** Same payout table as the real backend (fairness.ts). */
-function demoPayoutMult(target: string, result: number): number {
-  const t = target.toLowerCase();
-  if (t.startsWith("n-")) return parseInt(t.slice(2), 10) === result ? 36 : 0;
-  switch (t) {
-    case "red": return result !== 0 && result !== 37 && demoColor(result) === "red" ? 2 : 0;
-    case "black": return result !== 0 && result !== 37 && demoColor(result) === "black" ? 2 : 0;
-    case "odd": return result !== 0 && result !== 37 && result % 2 === 1 ? 2 : 0;
-    case "even": return result !== 0 && result !== 37 && result % 2 === 0 ? 2 : 0;
-    case "low": return result !== 0 && result !== 37 && result <= 18 ? 2 : 0;
-    case "high": return result !== 0 && result !== 37 && result >= 19 ? 2 : 0;
-    case "firstfour": return result >= 0 && result <= 3 ? 9 : 0;
-    case "topline": return result === 0 || result === 37 || (result >= 1 && result <= 3) ? 7 : 0;
-  }
-  const list = (prefix: string, count: number): number[] | null => {
-    if (!t.startsWith(prefix)) return null;
-    const parts = t.slice(prefix.length).split("-");
-    if (parts.length !== count) return null;
-    const nums = parts.map((p) => parseInt(p, 10));
-    if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 37)) return null;
-    return nums;
-  };
-  const split = list("split-", 2);
-  if (split) return split.includes(result) ? 18 : 0;
-  const street = list("street-", 3);
-  if (street) return street.includes(result) ? 12 : 0;
-  const corner = list("corner-", 4);
-  if (corner) return corner.includes(result) ? 9 : 0;
-  const six = list("sixline-", 6);
-  if (six) return six.includes(result) ? 6 : 0;
-  if (t.startsWith("dozen-")) {
-    const d = parseInt(t.slice(6), 10);
-    const dz = result === 0 || result === 37 ? null : Math.floor((result - 1) / 12) + 1;
-    return d >= 1 && d <= 3 && dz === d ? 3 : 0;
-  }
-  if (t.startsWith("col-")) {
-    const c = parseInt(t.slice(4), 10);
-    const col = result === 0 || result === 37 ? null : result % 3 === 0 ? 3 : result % 3;
-    return c >= 1 && c <= 3 && col === c ? 3 : 0;
-  }
-  return 0;
-}
-
-function demoDescribe(target: string): string {
-  const num = (n: number) => (n === 37 ? "00" : String(n));
-  const nums = (s: string) => s.split("-").map((x) => num(parseInt(x, 10)));
-  const t = target.toLowerCase();
-  if (t.startsWith("n-")) return `straight ${num(parseInt(t.slice(2), 10))}`;
-  if (t.startsWith("split-")) return `split ${nums(t.slice(6)).join("/")}`;
-  if (t.startsWith("street-")) return `street ${nums(t.slice(7)).join("-")}`;
-  if (t.startsWith("corner-")) return `corner ${nums(t.slice(7)).join("/")}`;
-  if (t.startsWith("sixline-")) {
-    const n = nums(t.slice(8));
-    return `six-line ${n[0]}-${n[2]}/${n[3]}-${n[5]}`;
-  }
-  if (t.startsWith("dozen-")) return `dozen ${t.slice(6)}`;
-  if (t.startsWith("col-")) return `column ${t.slice(4)}`;
-  const names: Record<string, string> = {
-    topline: "top line 0-00-1-2-3", firstfour: "first four", low: "1-18", high: "19-36",
-    red: "red", black: "black", odd: "odd", even: "even",
-  };
-  return names[t] ?? t;
-}
-
 function demoPlace(target: string, amount: number): void {
   if (demoPhase !== "betting") {
     flashResult("no more bets", false);
     return;
   }
   const staked = Object.values(serverMyBets).reduce((a, b) => a + b, 0);
-  const limit = demoInside(target) ? 500000 : 250000;
+  const limit = isInsideBet(target) ? 500000 : 250000;
   const already = serverMyBets[target] ?? 0;
   if (already + amount > limit) {
     sfx.error();
@@ -1035,14 +961,14 @@ function demoStartSpin(): void {
   if (demoPhase !== "betting" || !wheel || wheel.isSpinning) return;
   demoPhase = "spinning";
   const result = Math.floor(Math.random() * 38);
-  const color = demoColor(result);
+  const color = colorOf(result);
   const results: any[] = [];
   const balances: Record<string, number> = {};
 
   const settleOne = (p: PublicPlayer, bets: Record<string, number>): void => {
     let net = 0;
     for (const [target, amount] of Object.entries(bets)) {
-      const mult = demoPayoutMult(target, result);
+      const mult = payoutMultiplierForTarget(target, result);
       const payout = amount * mult;
       p.balance -= amount;
       net += payout - amount;
@@ -1050,7 +976,7 @@ function demoStartSpin(): void {
         p.balance += payout;
         results.push({
           player_id: p.id, player_name: p.display_name, bet_type: target,
-          bet_label: demoDescribe(target), bet_amount: amount, payout, net: payout - amount,
+          bet_label: describeBetTarget(target), bet_amount: amount, payout, net: payout - amount,
         });
       }
     }

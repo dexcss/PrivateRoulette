@@ -111,10 +111,36 @@ interface Conn {
   playerId: string | null;
   quit: boolean;
   lastChatTs: number;
+  betWindowStart: number;
+  betCount: number;
 }
 
 const MAX_CHAT = 60;
 const BET_TARGET_MAX_LEN = 40;
+const BET_WINDOW_MS = 2_000;
+const MAX_BETS_PER_WINDOW = 30;
+
+/**
+ * Events that may only ever come from an authenticated dealer connection.
+ * Everything else is a player/spectator event or hello/join-scoped.
+ * Keep this in sync with the "dealer operations" section below.
+ */
+const DEALER_ONLY = new Set([
+  "add_player",
+  "adjust_balance",
+  "set_player_vip",
+  "record_payout",
+  "request_spin",
+  "spin",
+  "clear_bets",
+  "rebet",
+  "send_chat",
+  "get_ledger",
+  "get_stats",
+  "cashout_player",
+  "end_game",
+  "delete_game",
+]);
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -185,7 +211,10 @@ export class TableRoom extends DurableObject<Env> {
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1]);
       try { pair[1].serializeAttachment({ role: "spectator", playerId: null }); } catch { }
-      this.conns.set(pair[1], { ws: pair[1], role: "spectator", playerId: null, quit: false, lastChatTs: 0 });
+      this.conns.set(pair[1], {
+        ws: pair[1], role: "spectator", playerId: null, quit: false,
+        lastChatTs: 0, betWindowStart: 0, betCount: 0,
+      });
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     return new Response("not found", { status: 404 });
@@ -203,6 +232,8 @@ export class TableRoom extends DurableObject<Env> {
         playerId: typeof att?.playerId === "string" ? att.playerId : null,
         quit: false,
         lastChatTs: 0,
+        betWindowStart: 0,
+        betCount: 0,
       };
       this.conns.set(ws, conn);
     }
@@ -379,6 +410,11 @@ export class TableRoom extends DurableObject<Env> {
       return;
     }
     const g = this.state;
+
+    // Authenticated role, not the client UI, decides who may run the table.
+    if (DEALER_ONLY.has(t) && conn.role !== "dealer") {
+      return this.err(ws, "dealer only");
+    }
 
     try {
       switch (t) {
@@ -880,10 +916,22 @@ export class TableRoom extends DurableObject<Env> {
     return p;
   }
 
+  /** Cheap per-connection flood guard for rapid bet add/remove traffic. */
+  private allowBetAction(conn: Conn): boolean {
+    const now = Date.now();
+    if (now - conn.betWindowStart > BET_WINDOW_MS) {
+      conn.betWindowStart = now;
+      conn.betCount = 0;
+    }
+    conn.betCount++;
+    return conn.betCount <= MAX_BETS_PER_WINDOW;
+  }
+
   private async placeBet(conn: Conn, ws: WebSocket, d: any): Promise<void> {
     const g = this.state!;
     const p = this.playerOrFail(conn, ws);
     if (!p) return;
+    if (!this.allowBetAction(conn)) return this.err(ws, "too many bet changes — slow down");
     if (g.table_locked || g.spinning) return this.err(ws, "table is locked");
     if (g.game_status !== "active") return this.err(ws, "game not active");
 
@@ -914,6 +962,7 @@ export class TableRoom extends DurableObject<Env> {
     const g = this.state!;
     const p = this.playerOrFail(conn, ws);
     if (!p) return;
+    if (!this.allowBetAction(conn)) return this.err(ws, "too many bet changes — slow down");
     if (g.table_locked || g.spinning) return this.err(ws, "table is locked");
     const target = String(d.target ?? "").trim().toLowerCase();
     if (!(target in p.bets)) return this.err(ws, "no bet there");
@@ -927,6 +976,7 @@ export class TableRoom extends DurableObject<Env> {
     const g = this.state!;
     const p = this.playerOrFail(conn, ws);
     if (!p) return;
+    if (!this.allowBetAction(conn)) return this.err(ws, "too many bet changes — slow down");
     if (g.table_locked || g.spinning) return this.err(ws, "table is locked");
     p.bets = {};
     await this.save();
@@ -938,6 +988,7 @@ export class TableRoom extends DurableObject<Env> {
     const g = this.state!;
     const p = this.playerOrFail(conn, ws);
     if (!p) return;
+    if (!this.allowBetAction(conn)) return this.err(ws, "too many bet changes — slow down");
     if (g.table_locked || g.spinning) return this.err(ws, "table is locked");
     const lastBets = g.all_bets.filter((b) => b.round_number === g.round_number && b.player_id === p.id);
     const wanted: Record<string, number> = {};

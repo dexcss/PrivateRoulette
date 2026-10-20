@@ -15,11 +15,15 @@
    "Here is your link to play: …"). Tell only works within the same data
    center; display-name-only seats can't be told.
 7. Players bet from their link; watch balances/bets in the console and on the
-   web console.
+   web console. Use the **table chat** box under the player list to talk to the
+   web table (the web dealer console has the same input). `AutoAnnounceBets`
+   posts `LastCall` + a compact current-bets line when the table locks.
 8. **Request spin** → roll `/random 1000` in chat (auto-captured) or type the
    dice (0–999). In manual mode, type the number (0–36, 37=00) and Force.
 9. The 28s wheel runs; at landing the web and in-game party chat reveal the
-   result, winners and balances.
+   result, winners and balances. `AutoAnnounceResults` posts the formatted
+   `Results` template to table chat (buffered by the web until landing); the
+   party line uses the `Win` template.
 10. **Cash** to cash out a player (trade their balance back), **Adjust** ± for
     tips/payouts, **VIP/UnVIP** to toggle caps. **Open dealer page** opens the
     web dealer console with auto-login; **Open spectator page** opens the
@@ -28,7 +32,8 @@
 ### Dealer web console (`#/dealer/{game}/{token}`)
 - Auto-login with the token in the hash (stripped after load).
 - Game list/create/open/delete, add player, +100k/−100k, cash out, VIP toggle,
-  copy invite link, request spin / dice / force, clear/rebet, ledger + CSV.
+  copy invite link, request spin / dice / force, clear/rebet, ledger + CSV,
+  and table chat.
 
 ### Spectator page (`#/spectate/{game}`)
 - Live board with **aggregate** chips per target, player list, history/stats,
@@ -36,7 +41,8 @@
 
 ### Playable demo (`#/demo`)
 - No backend. You start with 1,000,000; Aria/Bex/Cid bet each round.
-- 20s betting window (or **Spin now**), real payout table, winner chat,
+- 20s betting window (or **Spin now**), the **same payout table as the
+  backend** (imported from `server/src/fairness.ts`), winner chat,
   rebet/clear/cash out (resets the bankroll), loops forever.
 
 ## 2. Plugin release runbook
@@ -76,7 +82,7 @@ npx wrangler deploy
 curl https://private-roulette-api.dexcss-roulette.workers.dev/health
 ```
 
-- `src/worker.ts` has `DO_VERSION` (currently `"v11"`). The DO id is
+- `src/worker.ts` has `DO_VERSION` (currently `"v12"`). The DO id is
   `global-${DO_VERSION}`. **Durable Objects stay on the code version they
   started with**; bump `DO_VERSION` when a backend change must apply
   immediately. **Bumping resets all game storage** (games/ledger).
@@ -115,6 +121,8 @@ curl https://private-roulette-api.dexcss-roulette.workers.dev/health
 | `/random` not captured | Chat line format changed; look for `[dice] unparsed roll line:` and update the regex. |
 | Trade not credited | `[trade] opened/unmatched` lines; partner name mismatch; throttle 800ms. |
 | Bets rejected | Per-spot/total/balance limits; message in the status or `dealer_error`. |
+| `too many bet changes — slow down` | Client is flooding; the server allows 30 bet mutations per 2s per socket. |
+| Player gets `dealer only` | Expected — dealer operations are role-gated. If the dealer sees it, the socket authenticated as player/spectator; reconnect. |
 | Balance updates instantly | Reveal guard broken: web `renderBalance`/`renderPlayers`, in-game party delay (28.9s). |
 | Wheel tiny / not resizing | Canvas sized while hidden; ResizeObserver + `refreshSize()` on table show. |
 | Corner/split hover glow off | Zones must be centered on the gap middle (cell edge + 4px for an 8px gap). |

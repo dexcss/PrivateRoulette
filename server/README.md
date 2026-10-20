@@ -45,6 +45,9 @@ number), `place_bet`, `remove_bet`, `set_ready`, `cashout`, `send_chat` … and
 broadcasts `game_state`, `public_bets`, `spin` (with proof), `round_result`
 (winning `results` with bet labels), `table_history`, `chat_message`.
 Limits are per-spot **and** per-player total, each with VIP variants.
+Dealer events are authorized against the authenticated connection role
+(`DEALER_ONLY`); player sockets get `dealer_error: dealer only`. Bet
+mutations are limited to 30 per 2 seconds per connection.
 
 Fairness (American double-zero; 00 is encoded as 37):
 `result = uint32(sha256("{dice_roll}:{control_number}")[0..8]) % 38`

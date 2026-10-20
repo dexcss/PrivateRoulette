@@ -111,7 +111,6 @@ public sealed class PluginConfig : IPluginConfiguration
     // ---- behaviour ----
     [JsonProperty("AutoAnnounceBets")] public bool AutoAnnounceBets { get; set; } = true;
     [JsonProperty("AutoAnnounceResults")] public bool AutoAnnounceResults { get; set; } = true;
-    [JsonProperty("SoundEffects")] public bool SoundEffects { get; set; } = true;
     [JsonProperty("AutoOpenWheelOnSpin")] public bool AutoOpenWheelOnSpin { get; set; } = true;
     [JsonProperty("AnnouncePartyResults")] public bool AnnouncePartyResults { get; set; } = true;
     [JsonProperty("VerboseWireLog")] public bool VerboseWireLog { get; set; } = true;

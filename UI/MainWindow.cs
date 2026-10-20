@@ -29,6 +29,7 @@ public sealed class MainWindow : Window
     private int newPlayerBankrollInt;
     private string diceInput = string.Empty;
     private string manualNumberInput = string.Empty;
+    private string chatInput = string.Empty;
     private SpinMode selectedMode = SpinMode.Control;
     private string apiKeyInput = string.Empty;
     private int adjustAmountInt = 100;
@@ -429,7 +430,7 @@ public sealed class MainWindow : Window
 
     private void DrawTableChat()
     {
-        ImGui.BeginChild("tablechat", new Vector2(0, 110), true);;
+        ImGui.BeginChild("tablechat", new Vector2(0, 110), true);
         foreach (var m in this.session.Chat.TakeLast(30))
         {
             ImGui.TextColored(ColorFromHex(m.Color), m.FromName + ":");
@@ -439,6 +440,17 @@ public sealed class MainWindow : Window
         if (this.session.Chat.Count == 0)
             ImGui.TextDisabled("(table chat shows here — players see it on the web client)");
         ImGui.EndChild();
+
+        ImGui.SetNextItemWidth(-78);
+        var send = ImGui.InputTextWithHint("##tablechatinput", "message to the table…", ref this.chatInput, 240,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        ImGui.SameLine();
+        var clicked = ImGui.Button("Send");
+        if ((send || clicked) && !string.IsNullOrWhiteSpace(this.chatInput))
+        {
+            this.session.SendChat(this.chatInput.Trim());
+            this.chatInput = string.Empty;
+        }
     }
 
     private void DrawLedger()
@@ -619,9 +631,6 @@ public sealed class MainWindow : Window
         ImGui.SetNextItemWidth(120);
         ImGui.InputInt("##adjAmt", ref adjustAmountInt);
         ImGui.TextDisabled("use the +100/-100 buttons next to each player");
-
-        SectionText("Table chat");
-        ImGui.TextDisabled("table chat + dealer stats arrive in Phase 2");
     }
 
     internal static void SectionText(string text)
@@ -632,15 +641,7 @@ public sealed class MainWindow : Window
     }
 
     private void AnnounceNow(string key, params (string, string)[] placeholders)
-    {
-        // announcements flow through DiceService; expose directly here for the skeleton
-        var template = this.config.Announcements.GetValueOrDefault(key);
-        if (template == null) return;
-        foreach (var (k, v) in placeholders)
-            template = template.Replace($"${k}", v, StringComparison.Ordinal);
-        if (this.session.GameId != null)
-            this.session.SendChat(template);
-    }
+        => this.session.SendTemplate(key, placeholders);
 
     internal static Vector4 ColorFromHex(string hex)
     {
@@ -732,10 +733,24 @@ public sealed class SettingsWindow : Window
             this.config.Save();
         }
 
-        var sounds = this.config.SoundEffects;
-        if (ImGui.Checkbox("Sound effects (Phase 2)", ref sounds))
+        var autoBets = this.config.AutoAnnounceBets;
+        if (ImGui.Checkbox("Announce the current bets when the table locks", ref autoBets))
         {
-            this.config.SoundEffects = sounds;
+            this.config.AutoAnnounceBets = autoBets;
+            this.config.Save();
+        }
+
+        var autoResults = this.config.AutoAnnounceResults;
+        if (ImGui.Checkbox("Post the formatted results to table chat", ref autoResults))
+        {
+            this.config.AutoAnnounceResults = autoResults;
+            this.config.Save();
+        }
+
+        var autoWheel = this.config.AutoOpenWheelOnSpin;
+        if (ImGui.Checkbox("Open the wheel window when a spin starts", ref autoWheel))
+        {
+            this.config.AutoOpenWheelOnSpin = autoWheel;
             this.config.Save();
         }
 

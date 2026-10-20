@@ -51,7 +51,7 @@ public sealed class Plugin : IDalamudPlugin
 
         this.socket = new SocketService(this.config, log);
         this.session = new RouletteSession(this.config, this.socket, log, chatGui);
-        this.dice = new DiceService(this.config, this.session, chatGui, clientState, playerState, log);
+        this.dice = new DiceService(this.session, chatGui, clientState, playerState, log);
         this.ui = new PluginUi(this.pluginInterface, this.config, this.socket, this.session, log);
         this.chatSender = new ChatSender(log);
 
@@ -109,7 +109,6 @@ public sealed class Plugin : IDalamudPlugin
                 }
             }
 
-            this.dice.Tick();
             this.trade.Tick();
         }
 

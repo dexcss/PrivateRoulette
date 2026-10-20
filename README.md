@@ -42,12 +42,18 @@ cash-out, VIP/UnVIP toggles. A fully playable demo lives at
 - **All bet types:** straight, split, street, corner, six-line, top line
   (0-00-1-2-3), first-four, dozens, columns, red/black, odd/even, low/high —
   with the standard payouts.
-- **Live experience:** animated wheel with ball physics on both ends (procedural
-  art, no borrowed assets), synthesized sound effects, hot/cold stats, result
-  history, chat, per-player colored chips.
+- **Live experience:** animated wheel with the same 28s ball profile on both
+  ends (procedural art, no borrowed assets), synthesized sound effects on the
+  web, hot/cold stats, result history, chat, per-player colored chips.
 - **Dealer control:** spin modes (control / random / manual), per-spot and
   per-player total bet limits with VIP variants, chips, ready states, rebet,
-  clear, cash-out, tips, adjustments, VIP toggle after seating.
+  clear, cash-out, tips, adjustments, VIP toggle after seating, live table
+  chat from the plugin or web console.
+- **Announcements:** customizable templates for game info, last call/current
+  bets, results and the party `Win` line; party result reveal is delayed until
+  the wheel lands.
+- **Hardened backend:** dealer-only WebSocket events are role-gated and bet
+  mutations are rate-limited per connection.
 - **Ledger:** every round, bet, payout and adjustment persisted server-side;
   CSV export from the plugin.
 - **Access control:** plugin whitelist + dealer token; players only join via

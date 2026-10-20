@@ -4,7 +4,7 @@
 > console + wheel), Cloudflare Worker + Durable Object backend, and a static
 > web client (players/spectators/dealer console/playable demo).
 >
-> **Current release: `0.7.0.0`** (tag `v0.7.0.0`) · backend **DO v11** ·
+> **Current release: `0.8.0.0`** (tag `v0.8.0.0`) · backend **DO v12** ·
 > web demo at `https://dexcss.github.io/PrivateRoulette/#/demo`
 
 This is the first file to read in a new session. Then:
@@ -47,9 +47,9 @@ repo.json                   per-plugin Dalamud repo manifest
 
 | Thing | Where | Current |
 |---|---|---|
-| Plugin release | `github.com/dexcss/PrivateRoulette/releases` | `v0.7.0.0` |
-| Combined Dalamud repo | `github.com/dexcss/DalamudPlugins` (`repo.json`) | PrivateRoulette `0.7.0.0` |
-| Backend | `wss://private-roulette-api.dexcss-roulette.workers.dev/ws` | DO `v11` |
+| Plugin release | `github.com/dexcss/PrivateRoulette/releases` | `v0.8.0.0` |
+| Combined Dalamud repo | `github.com/dexcss/DalamudPlugins` (`repo.json`) | PrivateRoulette `0.8.0.0` |
+| Backend | `wss://private-roulette-api.dexcss-roulette.workers.dev/ws` | DO `v12` |
 | Web client | `https://dexcss.github.io/PrivateRoulette/` | Pages from `main` |
 | Web demo | `…#/demo` | playable, no backend |
 
@@ -74,37 +74,35 @@ provable-fairness spins, per-player colored chips, VIP toggles, per-spot and
 total bet limits, cashout, ledger/CSV, stats, deferred reveal in-game and on
 the web, and a fully playable web demo. The web client went through a visual
 revamp (felt/wood table, glossy cells, casino chips, physics-flavoured wheel
-with long number-track crawl and fret bumps). A tilted 3D wheel experiment was
-tried and reverted at the user's request — the top-down view is the intended
-look.
+with long number-track crawl and fret bumps); the in-game wheel now uses the
+same timing/radius profile. A tilted 3D wheel experiment was tried and reverted
+at the user's request — the top-down view is the intended look.
+
+**Post-audit hardening (0.8.0.0):** dealer-only WebSocket events are now
+role-gated server-side, bet mutations have a per-connection flood limit, the
+plugin dealer console has a live table-chat input, the announcement templates
+are wired (`GameInfo`, `LastCall`, `CurrentBets`, `Results`, `Win`), the inert
+sound toggle was removed, and the web demo imports the backend's payout table
+instead of duplicating it. The backend is on `v12`; the auth fix was verified
+by attacking it with a real player socket (all dealer events rejected).
 
 ## Known issues / next steps
 
-1. **P1 — dealer events are not role-gated on the backend.** A player socket
-   can send dealer messages (`add_player`, `adjust_balance`, `set_player_vip`,
-   `record_payout`, `request_spin`, `spin`, `clear_bets`, `rebet`,
-   `send_chat`, `get_ledger`, `get_stats`, `cashout_player`, `end_game`,
-   `delete_game`). Fix: gate those cases with `conn.role === "dealer"`, then
-   bump `DO_VERSION` (resets game storage). Details in `docs/AUDIT.md`.
-2. README/server README fairness text was `% 37`; **corrected to `% 38`** in
-   this docs pass. Stale "Phase 2" labels remain in the plugin; announcement
-   templates and `AutoAnnounceBets`/`AutoAnnounceResults`/`SoundEffects` are
-   unwired.
-3. The **in-game wheel** is still the older ImGui rotor-relative animation;
-   the web wheel has the newer physics-flavoured ball. Durations are synced
-   at 28s, and the party reveal delay is hard-coded to 28.9s in
-   `RouletteSession` — change both together.
-4. Plugin UI placeholders: "table chat + dealer stats arrive in Phase 2"
-   (`MainWindow.cs`) — the plugin has no table-chat panel (the web console
-   does); `SoundEffects` is inert (web-only sounds).
-5. `DiceService.Announce` / announcement templates and
-   `AutoAnnounceBets`/`AutoAnnounceResults` are not wired to anything yet.
-6. The demo duplicates the payout table in `web/src/main.ts`
-   (`demoPayoutMult`) — keep it in sync with `server/src/fairness.ts`.
-7. Trade partner matching is heuristic (trade window text → target → last
-   target); if it misses, check `[trade] unmatched …` in `dalamud.log`.
-8. No rate limit on bet placement and `save()` writes the full game per bet —
-   fine for a private table, not for hundreds of rapid bettors.
+1. Trade partner matching is still heuristic (trade-window text → target →
+   last target). If it misses, use the manual balance adjustment; the
+   `[trade] unmatched …` log line includes the window text and seated names.
+2. `save()` writes the whole game on every bet. The new rate limit (30 bet
+   changes / 2s per connection) keeps a private table safe; a very large
+   automated table would need batched storage writes.
+3. The in-game wheel now matches the web's **motion**, but its art is still
+   ImGui-drawn (flat pockets, no canvas gradients). The web remains the
+   premium visual reference.
+4. The party reveal delay is hard-coded to 28.9s in `RouletteSession` to match
+   the 28s wheel. If either duration changes, update both.
+5. Plugin sound effects are not implemented (the web has synthesized audio);
+   the dead setting was removed. Tips are recorded via adjustments /
+   `record_payout`; there is no dedicated tip button yet.
+6. `/tell` is same-data-center only (game limitation).
 
 ## Rollback
 

@@ -1,12 +1,10 @@
 using System;
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
 
-using PrivateRoulette.Configuration;
 using PrivateRoulette.Protocol;
 
 namespace PrivateRoulette.Services;
@@ -18,7 +16,6 @@ namespace PrivateRoulette.Services;
 /// </summary>
 public sealed partial class DiceService : IDisposable
 {
-    private readonly PluginConfig config;
     private readonly RouletteSession session;
     private readonly IChatGui chat;
     private readonly IClientState clientState;
@@ -84,12 +81,8 @@ public sealed partial class DiceService : IDisposable
     /// <summary>/random 1000 → 1..1000; map 1000 to 0 so the domain is exactly 0..999.</summary>
     private static long MapRoll(long value) => value == 1000 ? 0 : value;
 
-    /// <summary>Rendered announcements waiting to be sent to the table chat.</summary>
-    private readonly ConcurrentQueue<string> outgoingAnnouncements = new();
-
-    public DiceService(PluginConfig config, RouletteSession session, IChatGui chat, IClientState clientState, IPlayerState playerState, IPluginLog log)
+    public DiceService(RouletteSession session, IChatGui chat, IClientState clientState, IPlayerState playerState, IPluginLog log)
     {
-        this.config = config;
         this.session = session;
         this.chat = chat;
         this.clientState = clientState;
@@ -159,25 +152,6 @@ public sealed partial class DiceService : IDisposable
             this.log.Info($"completing spin with dice roll {roll}");
             this.session.Spin(roll, null);
         }
-    }
-
-    /// <summary>Runs on the framework tick; flushes queued announcements into the table chat.</summary>
-    public void Tick()
-    {
-        while (this.outgoingAnnouncements.TryDequeue(out var text))
-        {
-            if (this.session.GameId != null)
-                this.session.SendChat(text);
-        }
-    }
-
-    public void Announce(string templateKey, params (string key, string value)[] placeholders)
-    {
-        if (!this.config.Announcements.TryGetValue(templateKey, out var template))
-            return;
-        foreach (var (k, v) in placeholders)
-            template = template.Replace($"${k}", v, StringComparison.Ordinal);
-        this.outgoingAnnouncements.Enqueue(template);
     }
 
     public void Dispose()

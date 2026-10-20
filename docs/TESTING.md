@@ -21,8 +21,10 @@
   flash; `Spin now` → blocker + "wheel spinning"; after landing → balance
   delta/flash, `Number N (color)! …` chat, next window with new NPC chips;
   Rebet restores the last round; Clear empties; Cash out resets the bankroll.
-- The demo payout table mirrors `server/src/fairness.ts`; if you change
-  payouts, change both.
+- The demo imports `payoutMultiplierForTarget` / `describeBetTarget` /
+  `isInsideBet` directly from `server/src/fairness.ts`, so a payout change is
+  automatically reflected in both. If the import breaks, check the Vite
+  `server.fs.allow: [".."]` setting.
 
 ## 2. Backend end-to-end (Node WebSocket scripts)
 
@@ -31,6 +33,7 @@ live worker with the dealer token:
 
 | Script | Purpose |
 |---|---|
+| `pr_authcheck.mjs` | **0.8.0.0 security smoke:** dealer creates a game; a real player socket tries `get_stats`/`add_player`/`adjust_balance` (must be rejected), places a valid bet, floods 40 bets (31st must be rate-limited), dealer spins, results present, game deleted |
 | `pr_e2e.mjs` | auth → create game → add player → place bets → spin → payout → stats → cashout |
 | `pr_limitcheck.mjs` | per-spot/total cap rejection, `round_result.results` payload |
 | `pr_vipcheck.mjs` | VIP toggle, 600k allowed as VIP, normal total rejected after UnVIP |
@@ -113,6 +116,12 @@ After tagging and the workflows finish:
       dozens/columns/even-money); limits reject correctly.
 - [ ] Spectator sees the board and aggregate chips; cannot bet.
 - [ ] Request spin + `/random` capture; wheel 28s on web and in-game.
+- [ ] In-game wheel lands exactly, then idles without a post-settle jump;
+      ball crawls the number track with tiny fret hops.
+- [ ] Plugin table-chat input posts to the web and the dealer web console chat
+      input posts back.
+- [ ] Auto announcements: game info on create, last call/current bets on lock,
+      results after settle; party `Win` line after 28.9s.
 - [ ] Reveal deferred on web; party announcement after the wheel.
 - [ ] Winners line lists player/bet/profit; balances/net correct.
 - [ ] VIP toggle changes caps; cashout works; ledger/CSV export.

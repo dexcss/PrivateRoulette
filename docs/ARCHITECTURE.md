@@ -62,10 +62,14 @@ Envelope both ways: `{ "t": "<event>", "d": { … } }` over `wss://…/ws`.
 | `create_game` | `{spin_mode, dealer_name, dealer_world, limits, chips}` | dealer only (checked inside) |
 | `join_game` | `{game_id}` | all roles |
 
-### Dealer events (should be dealer-gated — see audit P1)
+### Dealer events (role-gated server-side)
 `add_player`, `adjust_balance`, `set_player_vip`, `record_payout`,
 `request_spin`, `spin`, `clear_bets`, `rebet`, `send_chat`, `get_ledger`,
 `get_stats`, `cashout_player`, `end_game`, `delete_game`.
+These are checked against the authenticated `conn.role` before dispatch; a
+player/spectator socket gets `dealer_error: dealer only`. Bet add/remove/
+clear/rebet actions also pass a per-connection flood limiter (30 changes in
+any 2s window).
 
 ### Player events
 `place_bet {target, amount}`, `remove_bet {target}`, `clear_my_bets`,
@@ -159,6 +163,14 @@ street/corner/sixline/topline/firstfour; limits use that split.
    party announcement 28.9s.
 5. Next round: players bet again; dealer requests another spin.
 
+**Announcements.** The plugin renders the configurable templates into table
+chat: `GameInfo`/`GameInfoControl` on game creation, `LastCall` +
+`CurrentBets` when the table locks (if `AutoAnnounceBets`), `Results` on
+`round_result` (if `AutoAnnounceResults`), and `Win` for the delayed party
+result line. The dealer can also send a manual table-chat line from the plugin
+panel; the web dealer console has the same input. The web buffers chat during
+the spin and flushes it in `revealRound()`.
+
 ## 8. Web client
 
 - **Routes** (hash, because GitHub Pages):
@@ -187,7 +199,8 @@ street/corner/sixline/topline/firstfour; limits use that split.
   overlay) rotated each frame; ball animated top-down with independent rotor
   and relative-ball progress, a long crawl on the number track, tiny slow
   fret bumps, smoothstepped radius transitions and an exact landing. 28s.
-- **Demo**: local engine mirrors the backend payout table; 20s betting window,
+- **Demo**: local engine **imports the backend payout table** from
+  `server/src/fairness.ts` (Vite `server.fs.allow: [".."]`), 20s betting window,
   countdown ticker, NPC random bets, `Spin now`, payout/results chat,
   rebet/clear/cash-out, loops forever.
 
@@ -195,7 +208,9 @@ street/corner/sixline/topline/firstfour; limits use that split.
 
 - `PluginConfig`: `ApiUrl`, `DealerToken`, `AuthorizedDealers` (default
   `Akari Zanto@Adamantoise`), spin mode, per-spot/total limits + VIP, chip
-  presets, announcements, party announce, verbose wire log, trade throttle.
+  presets, announcement templates/toggles, party announce, auto-open wheel,
+  verbose wire log, trade throttle. Plugin sound effects are intentionally not
+  part of the config (the web has audio).
 - Whitelist is checked every framework tick from `CharacterContext`
   (name/world/content id). Unauthorized characters never open the socket.
 - Backend `DEALER_TOKEN` is a Worker secret. The web dealer token is in

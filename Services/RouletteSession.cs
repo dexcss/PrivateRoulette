@@ -91,12 +91,30 @@ public sealed class RouletteSession : IDisposable
         socket.AuthOk += this.OnAuthOk;
         socket.Disconnected += _ => this.Reset();
         socket.GamesList += g => { this.KnownGames = g.Games; this.Changed?.Invoke(); };
-        socket.GameCreated += g => { this.GameId = g.GameId; this.State = null; this.Changed?.Invoke(); };
+        socket.GameCreated += g =>
+        {
+            this.GameId = g.GameId;
+            this.State = null;
+            this.AnnounceGameInfo(g);
+            this.Changed?.Invoke();
+        };
         socket.GameState += this.OnGameState;
         socket.PlayerCreated += this.OnPlayerCreated;
-        socket.SpinReady += r => { this.PendingSpin = r; this.AwaitingDice = r.SpinMode == "control"; this.Changed?.Invoke(); };
+        socket.SpinReady += r =>
+        {
+            this.PendingSpin = r;
+            this.AwaitingDice = r.SpinMode == "control";
+            this.AnnounceBetsBeforeSpin();
+            this.Changed?.Invoke();
+        };
         socket.Spin += r => { this.LastSpin = r; this.PendingSpin = null; this.AwaitingDice = false; this.SpinReceived?.Invoke(r); this.Changed?.Invoke(); };
-        socket.RoundResult += r => { this.AwaitingDice = false; this.AnnounceRoundToParty(r); this.Changed?.Invoke(); };
+        socket.RoundResult += r =>
+        {
+            this.AwaitingDice = false;
+            this.AnnounceResultsToTable(r);
+            this.AnnounceRoundToParty(r);
+            this.Changed?.Invoke();
+        };
         socket.TableHistory += r => { this.History.Clear(); this.History.AddRange(r.History); this.Changed?.Invoke(); };
         socket.ChatHistory += r => { this.Chat.Clear(); this.Chat.AddRange(r.Messages); this.Changed?.Invoke(); };
         socket.ChatMessage += m => { this.Chat.Add(m); this.Changed?.Invoke(); };
@@ -278,10 +296,77 @@ public sealed class RouletteSession : IDisposable
 
     public void SendChat(string text)
     {
-        if (this.GameId == null) return;
+        if (this.GameId == null || string.IsNullOrWhiteSpace(text)) return;
         _ = this.socket.SendChatAsync(this.GameId, text);
         // local echo so the dealer sees what was announced without opening the web client
         this.chat?.Print(new XivChatEntry { Message = $"[table] {text}", Type = XivChatType.Echo });
+    }
+
+    /// <summary>Renders one of the configurable announcement templates.</summary>
+    public string RenderTemplate(string key, params (string key, string value)[] placeholders)
+    {
+        if (!this.config.Announcements.TryGetValue(key, out var template) || string.IsNullOrWhiteSpace(template))
+            return string.Empty;
+        foreach (var (k, v) in placeholders)
+            template = template.Replace($"${k}", v, StringComparison.Ordinal);
+        return template;
+    }
+
+    /// <summary>
+    /// Sends a rendered announcement to the table chat (web/players/dealer
+    /// panel). Unlike <see cref="SendChat"/> this does not echo to FFXIV chat,
+    /// so automatic announcements don't spam the dealer's Echo log.
+    /// </summary>
+    public void SendTemplate(string key, params (string key, string value)[] placeholders)
+    {
+        if (this.GameId == null) return;
+        var text = this.RenderTemplate(key, placeholders);
+        if (text.Length > 0) _ = this.socket.SendChatAsync(this.GameId, text);
+    }
+
+    private void AnnounceGameInfo(GameCreated g)
+    {
+        this.SendTemplate(
+            g.SpinMode == "control" ? "GameInfoControl" : "GameInfo",
+            ("Gil", g.MaxBetInner.ToString("N0")),
+            ("SpinType", g.SpinMode),
+            ("Control", g.ControlNumber ?? "?"));
+    }
+
+    /// <summary>Auto-announce the locked table's bets (one compact line; the chat is capped at 300 chars).</summary>
+    private void AnnounceBetsBeforeSpin()
+    {
+        if (!this.config.AutoAnnounceBets) return;
+
+        this.SendTemplate("LastCall");
+        var players = this.State?.Players;
+        if (players == null) return;
+
+        var parts = new List<string>();
+        foreach (var p in players)
+        {
+            if (p.Bets.Count == 0) continue;
+            parts.Add($"{p.DisplayName}: {p.Bets.Values.Sum():N0} ({p.Bets.Count} bets)");
+        }
+
+        this.SendTemplate("CurrentBets", ("Bets", parts.Count > 0 ? string.Join(" | ", parts) : "no bets yet"));
+    }
+
+    private void AnnounceResultsToTable(RoundResult result)
+    {
+        if (!this.config.AutoAnnounceResults) return;
+
+        var winners = result.Results;
+        var text = winners == null || winners.Count == 0
+            ? "No winning bets this round."
+            : string.Join(" | ", winners.Select(w =>
+                $"{w.PlayerName} +{w.Net:N0} on {(string.IsNullOrWhiteSpace(w.BetLabel) ? w.BetType : w.BetLabel)}"));
+
+        this.SendTemplate(
+            "Results",
+            ("Number", Wheel.Display(result.Result)),
+            ("Color", result.Color),
+            ("Results", text));
     }
 
     /// <summary>Match a seated player by full name or display name.</summary>
@@ -336,7 +421,13 @@ public sealed class RouletteSession : IDisposable
                 try
                 {
                     var number = Wheel.Display(result.Result);
-                    this.RunCommand?.Invoke($"/p Number {number} ({result.Color})!");
+                    var winLine = this.RenderTemplate(
+                        "Win",
+                        ("Number", number),
+                        ("Color", result.Color));
+                    if (string.IsNullOrWhiteSpace(winLine))
+                        winLine = $"Number {number} ({result.Color})!";
+                    this.RunCommand?.Invoke($"/p {winLine}");
 
                     var wins = result.Results;
                     if (wins == null || wins.Count == 0)

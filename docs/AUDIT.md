@@ -8,15 +8,15 @@ deployed Pages site.
 
 | Item | Value |
 |---|---|
-| Plugin source version | `0.7.0.0` (`PrivateRoulette.csproj`) |
-| Per-plugin repo manifest | `0.7.0.0` (`repo.json`) |
-| Latest GitHub release | `v0.7.0.0` — 2026-10-20T04:18:50Z |
-| Latest tag | `v0.7.0.0` (plus `backup-pre-revamp`) |
-| Backend health | `{"ok":true,"service":"private-roulette-api","version":"v11"}` |
-| Combined repo | PrivateRoulette `0.7.0.0` (raw confirmed) |
-| Pages JS asset | `assets/index-BVZXvtUv.js` |
-| Working tree | clean |
-| Web demo | live (`#/demo`, playable) |
+| Plugin source version | `0.8.0.0` (`PrivateRoulette.csproj`) |
+| Per-plugin repo manifest | `0.8.0.0` (`repo.json`) |
+| Latest GitHub release | `v0.8.0.0` (remediation build) |
+| Latest tag | `v0.8.0.0` (plus `backup-pre-revamp`) |
+| Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
+| Combined repo | PrivateRoulette `0.8.0.0` |
+| Pages JS asset | deployed from `main` (hash changes per build) |
+| Working tree | docs/version update committed before the release |
+| Web demo | live (`#/demo`, playable, shared payout table) |
 
 ## 2. Component inventory
 
@@ -78,11 +78,13 @@ deployed Pages site.
 | Web | player/spectator/dealer routes, 00 board, colored chips, uniform row | ✅ |
 | Web | playable demo (bet, NPCs, payouts, countdown, rebet/clear/cashout) | ✅ |
 | Web | responsive resize (wheel ResizeObserver, hidden-view sizing) | ✅ |
-| Plugin | in-game wheel + dealer console | ✅ |
-| Plugin | table chat panel | ❌ placeholder (web has it) |
-| Plugin | plugin sound effects | ❌ config inert |
-| Plugin | announcement templates ($Name/$Bets/…) | ⚠️ code exists, not wired |
-| Backend | dealer-only role enforcement on dealer events | ❌ **P1 finding** |
+| Plugin | in-game wheel + dealer console | ✅ motion now matches web (28s profile/fret bumps) |
+| Plugin | table chat panel + dealer chat input | ✅ |
+| Plugin | plugin sound effects | removed (web-only audio; dead toggle deleted) |
+| Plugin | announcement templates ($Name/$Bets/…) | ✅ auto + manual announcements wired |
+| Backend | dealer-only role enforcement on dealer events | ✅ verified against a real player socket |
+| Backend | bet flood protection | ✅ 30 bet changes / 2s per connection |
+| Web | demo payout table | ✅ imports `server/src/fairness.ts` (no duplicate) |
 
 ## 4. Verification evidence (built up during the project)
 
@@ -113,56 +115,67 @@ deployed Pages site.
 
 ## 5. Findings
 
-### P1 — Dealer WebSocket events are not role-gated (security)
-`table.ts` dispatches these cases without checking `conn.role`:
+### P1 — Dealer WebSocket events were not role-gated (security) — **FIXED / verified**
+`table.ts` previously dispatched these cases without checking `conn.role`:
 `add_player`, `adjust_balance`, `set_player_vip`, `record_payout`,
 `request_spin`, `spin`, `clear_bets`, `rebet`, `send_chat`, `get_ledger`,
 `get_stats`, `cashout_player`, `end_game`, `delete_game`.
-A player connection (`role: "player"` with a valid player_key) can send any of
-them. `list_games` and `create_game` are protected (one checks inline, one
-inside `createGame`).
+A player connection (`role: "player"` with a valid player_key) could send any
+of them. `list_games` and `create_game` were already protected.
 
-**Fix** (before the next public session): add a dealer-only set before the
-switch and reject others, e.g.:
+**Fix shipped in 0.8.0.0 / backend v12:** a module-level `DEALER_ONLY` set is
+checked before the switch, and each bet mutation also passes a per-connection
+2s/30-action limiter:
 
 ```ts
-const DEALER_ONLY = new Set([
-  "add_player","adjust_balance","set_player_vip","record_payout","request_spin",
-  "spin","clear_bets","rebet","send_chat","get_ledger","get_stats",
-  "cashout_player","end_game","delete_game",
-]);
 if (DEALER_ONLY.has(t) && conn.role !== "dealer") {
   return this.err(ws, "dealer only");
 }
 ```
 
-Then bump `DO_VERSION` to force the live DO onto the new code (resets game
-storage). Also consider rate-limiting bets and avoiding `save()` per bet.
+The live worker was attacked with a real player socket after the deploy:
+`get_stats`, `add_player` and `adjust_balance` all returned `dealer only`, a
+valid bet still worked, and the 31st rapid bet returned
+`too many bet changes — slow down`. `DO_VERSION` was bumped to `v12` (fresh
+storage, as expected).
 
-### P2 — Documentation drift (partially fixed in this pass)
+### P2 — Documentation drift — **FIXED**
 - `README.md` / `server/README.md` fairness text said `% 37`; **corrected to
-  `% 38`** (American double-zero) in this docs pass.
-- `MainWindow.cs` still shows `"table chat + dealer stats arrive in Phase 2"`
-  and `"Sound effects (Phase 2)"`. Table chat exists on the web; the plugin
-  panel does not. Sound is web-only.
+  `% 38`** (American double-zero).
+- The stale "table chat + dealer stats arrive in Phase 2" label and the inert
+  "Sound effects (Phase 2)" toggle are **gone**. The plugin now has a live
+  table-chat panel with a send box (the web console has the same feed and a
+  dealer chat input). Plugin audio has been removed as a promise; the web has
+  synthesized sounds.
 - The README button labels were updated: **Open spectator page** and
   **Open dealer page**.
 
-### P2 — In-game wheel is behind the web wheel
+### P2 — In-game wheel was behind the web wheel — **FIXED (motion)**
 The web wheel received the physics-flavoured revamp (independent rotor/ball
 timing, number-track crawl, fret bumps, smoothstepped radius). The plugin
-wheel is the older ImGui rotor-relative animation. Durations are synced (28s)
-and `RouletteSession` party delay is 28.9s — if either changes, keep them in
-sync.
+wheel is now ported to the same profile: 28s, 8–10 ball turns, rim → 0.862R
+track crawl → 0.69R pocket, 0.8% fret hops, enveloped settle wobble, exact
+landing. The post-settle idle-angle jump was also fixed (the old code reset to
+a wall-clock angle). The plugin art is still ImGui-drawn, so the web remains
+the visual reference. `RouletteSession` party delay stays 28.9s — keep it in
+sync if the wheel duration changes.
 
-### P3 — Unwired settings / templates
-`DiceService.Announce` and the `Announcements` templates have no callers;
-`AutoAnnounceBets` / `AutoAnnounceResults` are inert; `SoundEffects` only
-appears in the settings UI. Decide: wire them or remove them.
+### P3 — Unwired settings / templates — **FIXED**
+`DiceService.Announce` and the `Announcements` templates had no callers;
+`AutoAnnounceBets` / `AutoAnnounceResults` were inert; `SoundEffects` only
+appeared in the settings UI. **Fixed:** announcements are rendered in
+`RouletteSession` and sent to table chat (`GameInfo`/`GameInfoControl` on
+create, `LastCall` + `CurrentBets` when the table locks, `Results` on settle),
+`Win` is used for the party result line, and the settings expose all toggles.
+The dead `DiceService` queue/`Announce` code and the sound setting were
+removed.
 
-### P3 — Duplicated demo payout table
-`web/src/main.ts` (`demoPayoutMult`) mirrors `server/src/fairness.ts`. Any
-payout change must be applied in both places.
+### P3 — Duplicated demo payout table — **FIXED**
+`web/src/main.ts` (`demoPayoutMult`) mirrored `server/src/fairness.ts`.
+**Fixed:** the demo now imports `payoutMultiplierForTarget`,
+`describeBetTarget` and `isInsideBet` directly from
+`../../server/src/fairness` (Vite `server.fs.allow: [".."]` for dev). There is
+no duplicate payout table left to drift.
 
 ### P3 — Trade partner matching is heuristic
 Window text nodes → current target → last target. If a trade is credited to
@@ -170,8 +183,8 @@ the wrong player, read the `[trade] opened/unmatched` lines in
 `dalamud.log`. The gil delta itself is exact (gil snapshot at open/close).
 
 ### P3 — Release/CDN operational traps
-- Tags must be four-part and match the manifest: `v0.7.0.0` ↔
-  `<Version>0.7.0.0</Version>` ↔ manifest `0.7.0.0`. A 3-part project
+- Tags must be four-part and match the manifest: `v0.8.0.0` ↔
+  `<Version>0.8.0.0</Version>` ↔ manifest `0.8.0.0`. A 3-part project
   version produces a manifest mismatch; Dalamud rejects it as "Load failed"
   (and the CI guard now fails the build).
 - `raw.githubusercontent.com/dexcss/DalamudPlugins` caches `repo.json` for up
@@ -181,6 +194,28 @@ the wrong player, read the `[trade] opened/unmatched` lines in
 - Durable Object instances stay on the code version they started with;
   backend changes need a `DO_VERSION` bump to apply immediately (and that
   wipes game storage).
+
+## 5a. Remediation verification (0.8.0.0 / backend v12)
+
+| Check | Result |
+|---|---|
+| Dealer auth | real dealer socket authenticated, created a game, issued a player key |
+| Player sends `get_stats` | rejected: `dealer only` |
+| Player sends `add_player` | rejected: `dealer only` |
+| Player sends `adjust_balance` | rejected: `dealer only` |
+| Player places a valid bet | accepted (`bets_updated`) |
+| 40 rapid bets | 31st rejected: `too many bet changes — slow down` |
+| Spin after the flood | locked, settled on 13, `round_result.results` present |
+| Test cleanup | game deleted |
+| Plugin build | `dotnet build -c Release` — 0 warnings, 0 errors |
+| Web build | TypeScript + Vite — success, demo imports the server payout table |
+| Web demo | 1M bankroll, 100k on straight 17 + split 3-6 + corner 3-6-2-5; balance frozen at 1,000,000 during the spin; landed 00; revealed 700,000 and `▼ 300,000`; looped to the next betting window |
+| Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
+
+**Not tested in-game (maintenance):** the new 0.8.0.0 wheel motion, the plugin
+chat send box, and the automatic table-chat announcements. They compile and
+use only existing, previously verified APIs, but need a `/pr` smoke test when
+the game is back.
 
 ## 6. Game limitations (not bugs)
 
@@ -199,11 +234,12 @@ the wrong player, read the `[trade] opened/unmatched` lines in
 
 ## 8. Recommended next steps
 
-1. Ship the P1 role-gating fix (with DO_VERSION bump, accepting a game reset).
-2. Correct the READMEs' fairness text and stale plugin labels.
-3. Wire the announcement templates to the web/party chat, or remove the dead
-   settings.
-4. Bring the plugin wheel up to the web ball quality (or accept the visual
-   difference).
-5. Add a dedicated tip button (currently tips are adjustments/record_payout).
-6. Optional: spectator chat, racetrack/call-bet section, theme support.
+1. In-game smoke test of 0.8.0.0 (wheel motion, chat input, auto
+   announcements) once maintenance ends.
+2. Optional: batch Durable Object storage writes (the bet flood limiter covers
+   the private-table case).
+3. Optional: trade-confirmation/reassign UI for ambiguous partners (the
+   current fallbacks log the window text and seated names; manual adjustment
+   remains available).
+4. Optional: dedicated tips button (currently adjustments / `record_payout`).
+5. Optional: spectator chat, racetrack/call-bet section, theme support.
