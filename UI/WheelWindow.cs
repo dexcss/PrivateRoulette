@@ -38,6 +38,9 @@ public sealed class WheelWindow : Window
     private string lastColor = "";
     private DateTime settledAt = DateTime.MinValue;
 
+    /// <summary>Invoked by the "Dealer console" button; wired by PluginUi.</summary>
+    public Action? OpenMain { get; set; }
+
     public WheelWindow(PluginConfig config, RouletteSession session, IPluginLog log)
         : base("Private Roulette — Wheel###prwheel")
     {
@@ -175,7 +178,7 @@ public sealed class WheelWindow : Window
         var draw = ImGui.GetWindowDrawList();
         var origin = ImGui.GetCursorScreenPos();
         var avail = ImGui.GetContentRegionAvail();
-        var size = MathF.Max(260, MathF.Min(avail.X, avail.Y - 40));
+        var size = MathF.Max(260, MathF.Min(avail.X, avail.Y - 80));
         var center = origin + new Vector2(avail.X / 2, size / 2 + 4);
         var r = size / 2 - 6;
 
@@ -279,6 +282,9 @@ public sealed class WheelWindow : Window
         }
 
         ImGui.Dummy(new Vector2(avail.X, size + 8));
+
+        if (ImGui.Button("Dealer console", new Vector2(avail.X, 0)) && this.OpenMain != null)
+            this.OpenMain();
 
         // ---- footer ----
         var st = this.session.State;

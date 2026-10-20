@@ -364,9 +364,9 @@ public sealed class RouletteSession : IDisposable
         var link = this.PlayerLink(player);
         if (link == null) return;
         if (this.SendChatText != null)
-            this.SendChatText($"/tell {player.Name} {link}");
+            this.SendChatText($"/tell {player.Name} Here is your link to play: {link}");
         else
-            this.RunCommand?.Invoke($"/tell {player.Name} {link}");
+            this.RunCommand?.Invoke($"/tell {player.Name} Here is your link to play: {link}");
     }
 
     /// <summary>Player betting link for the given player.</summary>

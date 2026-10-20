@@ -164,9 +164,9 @@ export class Board {
     return el;
   }
 
-  /** Per-cell edge overlays: right edge = split with the next column,
-   *  bottom edge = street/split, bottom-right corner point = corner,
-   *  bottom edge of the bottom row = six line. Always aligned, no pixel math. */
+  /** Per-cell edge overlays: right edge = horizontal split, bottom edge =
+   *  vertical split (top/middle rows) or street (bottom row), bottom-right
+   *  corner = corner (top/middle rows) or six line (bottom row). */
   private buildCellEdges(): void {
     for (let row = 1; row <= 3; row++) {
       for (let col = 1; col <= 12; col++) {
@@ -186,7 +186,7 @@ export class Board {
           zchip.style.display = "none";
           z.appendChild(zchip);
           const list = this.zoneChips.get(target) ?? [];
-          list.push(zchip);
+          list.push(z);
           this.zoneChips.set(target, list);
 
           z.addEventListener("click", (e) => {
@@ -208,27 +208,29 @@ export class Board {
           });
         }
 
-        // bottom edge → split/street + (row 1/2) corner + (row 3) six line
+        // bottom edge → vertical split (inside a column) or street/six line
+        // on the bottom row
         if (row < 3) {
-          if (row === 1) {
-            zone(`street-${n}-${n - 1}-${n - 2}`, `Street ${n}/${n - 1}/${n - 2}`, {
-              bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
-            });
-          } else {
-            zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
-              bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
-            });
-          }
+          // split with the number below (3/2 or 2/1)
+          zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
+            bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
+          });
           if (col < 12) {
             zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
               bottom: "-7px", right: "-7px", width: "14px", height: "14px",
             });
           }
-        } else if (col < 12) {
-          // bottom row: six line spanning this column and the next
-          zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 12}-${n + 13}-${n + 14}`, `Six line ${n}-${n + 2}/${n + 12}-${n + 14}`, {
-            bottom: "-7px", left: "5px", right: "5px", height: "14px",
+        } else {
+          // bottom row: street under the column (1-2-3, 4-5-6, ...)
+          zone(`street-${n}-${n + 1}-${n + 2}`, `Street ${n}/${n + 1}/${n + 2}`, {
+            bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
           });
+          if (col < 12) {
+            // six line at the corner between this column and the next
+            zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 3}-${n + 4}-${n + 5}`, `Six line ${n}-${n + 2}/${n + 3}-${n + 5}`, {
+              bottom: "-7px", right: "-7px", width: "14px", height: "14px",
+            });
+          }
         }
       }
     }

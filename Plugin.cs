@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Game.Gui.Dtr;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -35,11 +36,12 @@ public sealed class Plugin : IDalamudPlugin
     private readonly TradeService trade;
     private readonly PluginUi ui;
     private readonly ChatSender chatSender;
+    private readonly IDtrBarEntry dtrEntry;
 
     /// <summary>Work items marshalled from socket threads onto the framework thread.</summary>
     private readonly ConcurrentQueue<Action> mainThreadQueue = new();
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState, IAddonLifecycle addonLifecycle, IGameGui gameGui, ITargetManager targetManager, IPartyList partyList)
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IFramework framework, IPluginLog log, IChatGui chatGui, IClientState clientState, IPlayerState playerState, IAddonLifecycle addonLifecycle, IGameGui gameGui, ITargetManager targetManager, IPartyList partyList, IDtrBar dtrBar)
     {
         this.pluginInterface = pluginInterface;
         this.commandManager = commandManager;
@@ -54,6 +56,14 @@ public sealed class Plugin : IDalamudPlugin
         this.dice = new DiceService(this.config, this.session, chatGui, clientState, playerState, log);
         this.ui = new PluginUi(this.pluginInterface, this.config, this.socket, this.session, log);
         this.chatSender = new ChatSender(log);
+
+        // Server info bar entry: an always-available in-game button to reopen
+        // the dealer console without typing /pr.
+        this.dtrEntry = dtrBar.Get("Private Roulette");
+        this.dtrEntry.Text = "Roulette";
+        this.dtrEntry.Tooltip = "Open the Private Roulette dealer console";
+        this.dtrEntry.OnClick = _ => this.ui.OpenMain();
+        this.dtrEntry.Shown = true;
 
         this.session.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.socket.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
@@ -150,6 +160,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         this.framework.Update -= this.OnFrameworkUpdate;
         this.commandManager.RemoveHandler(MainCommand);
+        this.dtrEntry.Remove();
         this.ui.Dispose();
         this.dice.Dispose();
         this.trade.Dispose();

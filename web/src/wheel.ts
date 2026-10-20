@@ -59,6 +59,9 @@ export class Wheel {
     this.ctx = canvas.getContext("2d")!;
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    // The table view is hidden at boot; recalculate as soon as it gets a size.
+    const parentEl = this.canvas.parentElement;
+    if (parentEl) new ResizeObserver(() => this.resize()).observe(parentEl);
     this.lastFrame = performance.now();
     const loop = (t: number) => {
       const dt = Math.min((t - this.lastFrame) / 1000, 0.05);
@@ -82,13 +85,21 @@ export class Wheel {
     cancelAnimationFrame(this.raf);
   }
 
+  /** Recompute the canvas size (call after the table view becomes visible). */
+  refreshSize() {
+    this.resize();
+  }
+
   get isSpinning(): boolean {
     return this.spin !== null;
   }
 
   private resize() {
     const parent = this.canvas.parentElement!;
-    const size = Math.max(280, Math.min(parent.clientWidth, 620));
+    // Allow the wheel to use most of the screen: cap by the available column
+    // width, the viewport height (history/stats live below it), and 900px.
+    const maxByHeight = Math.max(280, window.innerHeight - 240);
+    const size = Math.max(280, Math.min(parent.clientWidth, maxByHeight, 900));
     const dpr = window.devicePixelRatio || 1;
     this.canvas.style.width = `${size}px`;
     this.canvas.style.height = `${size}px`;

@@ -128,6 +128,7 @@ function showConnecting() {
   viewLanding.hidden = true;
   viewLocked.hidden = true;
   viewTable.hidden = false;
+  wheel?.refreshSize();
   statusLabel.textContent = "connecting…";
 }
 
@@ -186,17 +187,23 @@ api.on("game_state", (d: GameStateMsg) => {
   for (const p of ((d as any).players ?? []) as any[]) {
     if (p?.id && p?.player_key) playerKeys.set(p.id, p.player_key);
   }
+  if (board && !me && d.players?.length) board.renderBets(aggregateBets(d.players));
   renderState();
 });
 
 api.on("public_bets", (d: PublicBetsMsg) => {
   lastPlayers = d.players;
   renderPlayers(d.players);
-  if (board && me) {
-    const myId = me.playerId;
-    const mine = d.players.find((p) => p.id === myId);
-    if (mine) board.renderBets(mine.bets);
-    renderBalance(d.players);
+  if (board) {
+    if (me) {
+      const myId = me.playerId;
+      const mine = d.players.find((p) => p.id === myId);
+      if (mine) board.renderBets(mine.bets);
+      renderBalance(d.players);
+    } else {
+      // spectators and the dealer see every player's chips combined
+      board.renderBets(aggregateBets(d.players));
+    }
   }
 });
 
@@ -286,7 +293,9 @@ function renderState() {
 
   // locked / awaiting state
   const waiting = state.table_locked || state.spinning;
-  $("#betting-blocker").hidden = !waiting;
+  // Only players can bet, so only they get the blocking overlay; spectators
+  // keep watching the board while the wheel spins.
+  $("#betting-blocker").hidden = !waiting || role !== "player";
   $("#lock-label").textContent = state.spinning
     ? "Wheel is spinning…"
     : state.awaiting_dice
@@ -303,6 +312,7 @@ function renderState() {
       ` · VIP ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()}`;
   }
   if (role === "spectator") statusLabel.textContent = "spectating";
+  boardEl.classList.toggle("readonly", role !== "player");
 
   // dealer controls
   dealerBar.hidden = role !== "dealer";
@@ -336,8 +346,25 @@ function renderState() {
   cashoutBtn.hidden = role !== "player";
   rebetBtn.hidden = role !== "player";
   clearBtn.hidden = role !== "player";
-  $("#bet-wrap").hidden = role !== "player";
+
+  // The table/board stays visible for everyone - spectators and the dealer need
+  // to follow the action. Only the betting controls are player-only.
+  $("#bet-wrap").hidden = false;
   $("#chips").hidden = role !== "player";
+  const actions = document.querySelector("#bet-wrap .actions") as HTMLElement | null;
+  if (actions) actions.hidden = role !== "player";
+  const hint = document.querySelector(".board-hint") as HTMLElement | null;
+  if (hint) hint.hidden = role !== "player";
+}
+
+function aggregateBets(players: PublicPlayer[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const p of players) {
+    for (const [target, amount] of Object.entries(p.bets ?? {})) {
+      out[target] = (out[target] ?? 0) + amount;
+    }
+  }
+  return out;
 }
 
 function renderBalance(players: PublicPlayer[], force = false) {
@@ -495,6 +522,7 @@ function renderDealerGames(): void {
 function openDealerTable(): void {
   viewLanding.hidden = true;
   viewTable.hidden = false;
+  wheel?.refreshSize();
   dealerBar.hidden = false;
   api.send("join_game", { game_id: gameId });
 }
@@ -649,8 +677,15 @@ wheel = new Wheel(wheelCanvas);
 wheel.setTickCallback(() => sfx.tick());
 wheel.setSettleCallback(() => { sfx.land(); revealRound(); });
 board = new Board(boardEl, {
-  place: (target) => { sfx.chip(); api.send("place_bet", { target, amount: selectedChip }); },
-  remove: (target) => api.send("remove_bet", { target }),
+  place: (target) => {
+    if (role !== "player") return;
+    sfx.chip();
+    api.send("place_bet", { target, amount: selectedChip });
+  },
+  remove: (target) => {
+    if (role !== "player") return;
+    api.send("remove_bet", { target });
+  },
 });
 
 const auto = parseHash();

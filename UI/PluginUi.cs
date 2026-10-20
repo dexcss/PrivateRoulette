@@ -23,6 +23,7 @@ public sealed class PluginUi : IDisposable
         this.log = log;
         this.wheel = new WheelWindow(config, session, log);
         this.main = new MainWindow(config, socket, session, log, this.ShowWheel);
+        this.wheel.OpenMain = this.OpenMain;
         this.settings = new SettingsWindow(config);
         this.windowSystem.AddWindow(this.main);
         this.windowSystem.AddWindow(this.wheel);
