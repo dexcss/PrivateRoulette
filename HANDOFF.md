@@ -87,13 +87,15 @@ instead of duplicating it. The backend is on `v12`; the auth fix was verified
 by attacking it with a real player socket (all dealer events rejected).
 
 **Web board update (post-0.8.0.0):** every split/street/corner/six-line now
-has a visible gold line or dot hit target; top-row street/six-line mirrors are
-clickable (chips stay on the bottom line); the zero column supports 0/00,
-0/1 and 00/3 splits, 0-1-2 / 00-2-3 trios and first four; hovering any bet
-glows every number it covers (Red → all 18 red cells, dozens/columns → 12,
-splits/streets/corners/six-lines → their numbers); and the spin blocker is a
-`z-index: 60` gold-bordered box that covers every cell, line, dot and chip.
-Web-only deploy — the plugin/backend versions are unchanged.
+has a visible thin champagne line or small dot hit target (subtle at rest,
+bright gold on hover); the top-row mirrors and the TOP cell were removed (the
+backend still accepts `topline`, but the board does not expose it); the zero
+column supports 0/00, 0/1 and 00/3 splits, 0-1-2 / 00-2-3 trios and first
+four; hovering any bet glows every number it covers (Red → all 18 red cells,
+dozens/columns → 12, splits/streets/corners/six-lines → their numbers); and
+the spin blocker is a `z-index: 60` gold-bordered box that covers every cell,
+line, dot and chip. Web-only deploy — the plugin/backend versions are
+unchanged.
 
 ## Known issues / next steps
 

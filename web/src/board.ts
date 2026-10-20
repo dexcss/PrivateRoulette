@@ -1,5 +1,5 @@
 // Betting board: full American layout — stacked 00/0 column, numbers, splits,
-// streets, corners, six lines, top line, dozens, columns, even-money bets.
+// streets, corners, six lines, dozens, columns, even-money bets.
 //
 // In-between (split/street/corner/six-line) zones are per-cell edge overlays,
 // so they always align with the cells regardless of layout or window size.
@@ -118,7 +118,6 @@ export class Board {
       case "even": return Array.from({ length: 18 }, (_, i) => i * 2 + 2);
       case "low": return Array.from({ length: 18 }, (_, i) => i + 1);
       case "high": return Array.from({ length: 18 }, (_, i) => i + 19);
-      case "topline": return [0, 37, 1, 2, 3];
       case "firstfour": return [0, 1, 2, 3];
       default: return [];
     }
@@ -261,10 +260,6 @@ export class Board {
     this.cell("odd", "ODD", "#20242c", 10, 5, 2);
     this.cell("high", "19-36", "#20242c", 12, 5, 2);
 
-    // top line under the zeros
-    const tl = this.cell("topline", "TOP", "#20242c", 1, 4, 1);
-    tl.title = "Top line 0-00-1-2-3 (6:1)";
-
     // per-cell edge zones for splits/streets/corners/six-lines
     this.buildCellEdges();
     this.buildZeroEdges();
@@ -300,19 +295,17 @@ export class Board {
   }
 
   /** Creates one visible line/dot target and its per-player chip stack. */
-  private addZone(cell: HTMLElement, target: string, title: string, css: Partial<CSSStyleDeclaration>, kind: string, withChip = true): void {
+  private addZone(cell: HTMLElement, target: string, title: string, css: Partial<CSSStyleDeclaration>, kind: string): void {
     const z = document.createElement("div");
     z.className = `cellzone ${kind}`;
     z.title = title;
     z.dataset.target = target;
     Object.assign(z.style, { position: "absolute", pointerEvents: "auto" }, css as any);
 
-    if (withChip) {
-      const zchip = document.createElement("div");
-      zchip.className = "chipstack";
-      this.rootChipHosts(target, zchip);
-      z.appendChild(zchip);
-    }
+    const zchip = document.createElement("div");
+    zchip.className = "chipstack";
+    this.rootChipHosts(target, zchip);
+    z.appendChild(zchip);
 
     z.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -328,8 +321,7 @@ export class Board {
 
   /** Per-cell edge overlays: right edge = vertical split, bottom edge =
    *  horizontal split (top/middle rows) or street (bottom row), bottom-right
-   *  corner = corner (top/middle rows) or six line (bottom row). The top row
-   *  gets mirrored street/six-line targets on its top edge for symmetry. */
+   *  corner = corner (top/middle rows) or six line (bottom row). */
   private buildCellEdges(): void {
     for (let row = 1; row <= 3; row++) {
       for (let col = 1; col <= 12; col++) {
@@ -342,20 +334,6 @@ export class Board {
           this.addZone(cell, `split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
             right: "-16px", top: "8px", bottom: "8px", width: "24px",
           }, "zone-split-v");
-        }
-
-        // top row → the same street/six-line bets are also available above it
-        if (row === 1) {
-          // Mirrors are click targets only; the chip stays on the bottom line
-          // so a bet is never drawn twice.
-          this.addZone(cell, `street-${n - 2}-${n - 1}-${n}`, `Street ${n - 2}/${n - 1}/${n} (top)`, {
-            top: "-16px", left: "6px", right: "6px", height: "24px",
-          }, "zone-street zone-top", false);
-          if (col < 12) {
-            this.addZone(cell, `sixline-${n - 2}-${n - 1}-${n}-${n + 1}-${n + 2}-${n + 3}`, `Six line ${n - 2}-${n}/${n + 1}-${n + 3} (top)`, {
-              top: "-16px", right: "-16px", width: "24px", height: "24px",
-            }, "zone-sixline zone-top", false);
-          }
         }
 
         // bottom edge → vertical split (inside a column) or street/six line

@@ -34,7 +34,7 @@ live worker with the dealer token:
 | Script | Purpose |
 |---|---|
 | `pr_authcheck.mjs` | **0.8.0.0 security smoke:** dealer creates a game; a real player socket tries `get_stats`/`add_player`/`adjust_balance` (must be rejected), places a valid bet, floods 40 bets (31st must be rate-limited), dealer spins, results present, game deleted |
-| `pr_zerobets.mjs` | **zero multi-bet smoke:** places 0/00, 0/1, 00/3, 0-1-2, 00-2-3, first four and top line; manual spin 0; asserts the winning labels/payouts and that 00/3 and 00-2-3 lose |
+| `pr_zerobets.mjs` | **zero multi-bet smoke:** places 0/00, 0/1, 00/3, 0-1-2, 00-2-3, first four and top line (server-side; the board has no TOP cell); manual spin 0; asserts the winning labels/payouts and that 00/3 and 00-2-3 lose |
 | `pr_e2e.mjs` | auth → create game → add player → place bets → spin → payout → stats → cashout |
 | `pr_limitcheck.mjs` | per-spot/total cap rejection, `round_result.results` payload |
 | `pr_vipcheck.mjs` | VIP toggle, 600k allowed as VIP, normal total rejected after UnVIP |
@@ -80,13 +80,13 @@ const a = document.querySelector('.cell[data-target="n-3"]').getBoundingClientRe
 const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRect();
 // zone center should be (a.right + b.left) / 2 (within ~1px)
 ```
-- Expected zone counts: 131 total — 35 vertical splits, 25 horizontal
-  splits, 25 corners, 24 streets, 22 six-lines. The top row adds 12 mirrored
-  street zones and 11 mirrored six-line zones (`.zone-top`); zero adds 6.
-- `getComputedStyle(zone, '::before')` should show a 2px gold line (or 8px dot)
-  with a radial/linear gradient, not a transparent box.
-- Top mirrors have **no `.chipstack`**: click `.zone-top[data-target="street-1-2-3"]`;
-  the bottom zone should get the chip and the top zone should keep 0 chips.
+- Expected zone counts: 108 total — 35 vertical splits, 25 horizontal
+  splits, 25 corners, 12 streets, 11 six-lines. There are no `.zone-top`
+  mirrors and no `.cell[data-target="topline"]`.
+- `getComputedStyle(zone, '::before')` should show a thin champagne line
+  (1.5px) or a small 4px dot with no resting glow; hover brightens it.
+- Bottom-perimeter street lines and six-line dots are the only outer row
+  targets; clicking one places the bet and the chip appears on that line.
 - Zero targets to click/check: `split-0-37`, `split-0-1`, `split-37-3`,
   `street-0-1-2`, `street-37-2-3`, `corner-0-1-2-3`; each should place a chip
   and the demo/backend should settle it (see `pr_zerobets.mjs`).
@@ -96,8 +96,8 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
 - Covered-number hover (pointerover on the target, then count
   `.cell.covered`): `red`/`black`/`odd`/`even`/`low`/`high` → 18;
   `dozen-1`/`col-1` → 12; `split-3-6` → 2; `street-1-2-3` → 3;
-  `corner-3-6-2-5` → 4; `sixline-1-2-3-4-5-6` → 6; `topline` → 5;
-  `split-0-37` → 2; pointerover on `#board` clears. Read-only boards stay at 0.
+  `corner-3-6-2-5` → 4; `sixline-1-2-3-4-5-6` → 6; `split-0-37` → 2;
+  pointerover on `#board` clears. Read-only boards stay at 0.
 - Uniform outside row: the six even-money cells must have equal widths;
   dozens equal; number cells equal.
 - Corner chip: centered on the four-cell intersection, fully visible.
@@ -131,15 +131,15 @@ After tagging and the workflows finish:
 - [ ] Create a game with the intended limits/VIP caps/chips.
 - [ ] Add player, trade gil, balance auto-credits.
 - [ ] Invite link and Tell (same-DC) work.
-- [ ] Player bets all types (straight/split/street/corner/six-line/topline/
-      dozens/columns/even-money); limits reject correctly.
+- [ ] Player bets all board types (straight/split/street/corner/six-line/
+      first-four/dozens/columns/even-money); limits reject correctly.
 - [ ] Spectator sees the board and aggregate chips; cannot bet.
 - [ ] Request spin + `/random` capture; wheel 28s on web and in-game.
-- [ ] Gold lines/dots between numbers are visible; clicking a line/dot places
-      the matching split/street/corner/six-line; top and bottom street/six-line
-      lines both work; the same street bet isn't drawn twice.
+- [ ] Thin champagne lines/dots between numbers are visible; clicking a
+      line/dot places the matching split/street/corner/six-line; only the
+      bottom perimeter has street/six-line targets.
 - [ ] Zero multi-bets work: 0/00 split, 0/1 and 00/3 splits, 0-1-2 and
-      00-2-3 trios, first four, and the existing TOP line.
+      00-2-3 trios, and first four. There is no TOP cell.
 - [ ] "Wheel is spinning…" appears in a box above all numbers/chips during the
       spin, not behind them.
 - [ ] In-game wheel lands exactly, then idles without a post-settle jump;

@@ -69,7 +69,7 @@ deployed Pages site.
 | Money | trade auto-credit (gil delta at trade close) | ✅ verified live |
 | Money | manual adjustment +/-, record payout/tips (as adjustments) | ✅ |
 | Limits | per-spot inside 500k / outside 250k, total per player 500k; VIP 1M/500k/1M | ✅ verified |
-| Bets | straight, split, street, corner, six-line, topline, firstfour, dozens, columns, even-money | ✅ |
+| Bets | straight, split, street, corner, six-line, firstfour, dozens, columns, even-money; `topline` is server-only (no TOP cell) | ✅ |
 | Spin | `/random` capture, manual dice/number, provable fairness, proof display | ✅ |
 | Results | winner breakdown (player, bet, net, label) in `round_result` | ✅ |
 | Reveal | web header/list/chat frozen until wheel lands; in-game party delay | ✅ verified |

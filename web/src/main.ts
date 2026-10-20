@@ -57,7 +57,7 @@ let renderQueued = false;
 const DEMO_PLAYERS: PublicPlayer[] = [
   { id: "demo1", name: "Aria@Adamantoise", display_name: "Aria", color: "#E74C3C", chip_style: "classic", bets: { "n-17": 50000, "split-3-6": 25000, red: 25000 }, ready: true, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 1000000 },
   { id: "demo2", name: "Bex@Adamantoise", display_name: "Bex", color: "#3498DB", chip_style: "classic", bets: { "corner-3-6-2-5": 100000, "street-4-5-6": 50000, "sixline-1-2-3-4-5-6": 100000 }, ready: true, away: false, is_vip: true, is_freeplay: false, last_round_net: 0, balance: 2500000 },
-  { id: "demo3", name: "Cid@Adamantoise", display_name: "Cid", color: "#2ECC71", chip_style: "classic", bets: { "n-0": 25000, black: 100000, topline: 50000 }, ready: false, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 500000 },
+  { id: "demo3", name: "Cid@Adamantoise", display_name: "Cid", color: "#2ECC71", chip_style: "classic", bets: { "n-0": 25000, black: 100000 }, ready: false, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 500000 },
 ];
 let demoMode = false;
 
@@ -943,7 +943,7 @@ function demoNpcBets(): void {
   const targets = [
     "n-0", "n-17", "n-32", "n-37", "split-3-6", "split-18-21",
     "corner-3-6-2-5", "corner-15-18-14-17", "street-4-5-6", "street-25-26-27",
-    "sixline-1-2-3-4-5-6", "red", "black", "odd", "low", "dozen-2", "col-1", "col-3", "topline",
+    "sixline-1-2-3-4-5-6", "red", "black", "odd", "low", "dozen-2", "col-1", "col-3",
   ];
   const chips = [10000, 50000, 100000, 250000];
   for (const p of lastPlayers) {

@@ -39,9 +39,10 @@ cash-out, VIP/UnVIP toggles. A fully playable demo lives at
   `result = uint32(sha256("{dice}:{control}")[0..8]) % 38`, verified
   client-side on the site and in the plugin. Control number is issued per game
   by your backend.
-- **All bet types:** straight, split, street, corner, six-line, top line
-  (0-00-1-2-3), first-four, dozens, columns, red/black, odd/even, low/high —
-  with the standard payouts.
+- **All board bet types:** straight, split, street, corner, six-line,
+  first-four, dozens, columns, red/black, odd/even, low/high — with the
+  standard payouts. The backend also accepts the top line for compatibility,
+  but the board does not show a TOP cell.
 - **Live experience:** animated wheel with the same 28s ball profile on both
   ends (procedural art, no borrowed assets), synthesized sound effects on the
   web, hot/cold stats, result history, chat, per-player colored chips.
