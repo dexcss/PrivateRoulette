@@ -96,6 +96,10 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
 - During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
   must render inside its dark/gold box, and the box must be above every
   number, line, dot and chip (screenshot check).
+- Covered-number glow must not trap chips: apply a chip to `split-3-6` and
+  `corner-3-6-2-5`, hover `red`, then hit-test the chip's overlapping edge
+  with `document.elementsFromPoint` (chip must come before the neighboring
+  `.cell`). The covered cell itself must have `z-index: auto`.
 - Covered-number hover (pointerover on the target, then count
   `.cell.covered`): `red`/`black`/`odd`/`even`/`low`/`high` → 18;
   `dozen-1`/`col-1` → 12; `split-3-6` → 2; `street-1-2-3` → 3;

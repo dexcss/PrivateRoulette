@@ -189,8 +189,10 @@ the spin and flushes it in `revealRound()`.
   from the cell edge). Street/six-line targets are on the bottom perimeter
   only. The zero column adds the 0/00 split, 0/1, 00/3, 0/2 and 00/2 splits,
   the 0-1-2 / 00-2-3 / 0-00-2 trios and first four (0/1/2/3). Zones are above cells
-  (`z-index: 8`); avoid `filter` on hover
-  (stacking context clips chips). Hovering any cell or line/dot adds `.covered`
+  (`z-index: 8`). Keep hover/covered cells at `z-index: auto`: giving a cell
+  a z-index creates a stacking context and traps split/corner chips under
+  neighboring cells. Avoid `filter` on hover for the same reason. Hovering
+  any cell or line/dot adds `.covered`
   to every number cell the bet covers (red/black, odd/even, low/high,
   dozens/columns, splits/streets/corners/six-lines, zero bets), with the same
   gold inset/outer glow; it clears on pointer-leave and when the table locks.
