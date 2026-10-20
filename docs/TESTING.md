@@ -34,7 +34,7 @@ live worker with the dealer token:
 | Script | Purpose |
 |---|---|
 | `pr_authcheck.mjs` | **0.8.0.0 security smoke:** dealer creates a game; a real player socket tries `get_stats`/`add_player`/`adjust_balance` (must be rejected), places a valid bet, floods 40 bets (31st must be rate-limited), dealer spins, results present, game deleted |
-| `pr_zerobets.mjs` | **zero multi-bet smoke:** places 0/00, 0/1, 00/3, 0-1-2, 00-2-3, first four and top line (server-side; the board has no TOP cell); manual spin 0; asserts the winning labels/payouts and that 00/3 and 00-2-3 lose |
+| `pr_zerobets.mjs` | **zero multi-bet smoke:** places 0/00, 0/1, 00/3, 0-1-2, 00-2-3, 0-00-2, first four and top line (server-side; no TOP cell); manual spin 0; asserts the winning labels/payouts and that 00/3 and 00-2-3 lose |
 | `pr_e2e.mjs` | auth → create game → add player → place bets → spin → payout → stats → cashout |
 | `pr_limitcheck.mjs` | per-spot/total cap rejection, `round_result.results` payload |
 | `pr_vipcheck.mjs` | VIP toggle, 600k allowed as VIP, normal total rejected after UnVIP |
@@ -80,16 +80,18 @@ const a = document.querySelector('.cell[data-target="n-3"]').getBoundingClientRe
 const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRect();
 // zone center should be (a.right + b.left) / 2 (within ~1px)
 ```
-- Expected zone counts: 108 total — 35 vertical splits, 25 horizontal
-  splits, 25 corners, 12 streets, 11 six-lines. There are no `.zone-top`
+- Expected zone counts: 109 total — 35 vertical splits, 25 horizontal
+  splits, 26 corners, 12 streets, 11 six-lines. There are no `.zone-top`
   mirrors and no `.cell[data-target="topline"]`.
 - `getComputedStyle(zone, '::before')` should show a thin champagne line
   (1.5px) or a small 4px dot with no resting glow; hover brightens it.
 - Bottom-perimeter street lines and six-line dots are the only outer row
   targets; clicking one places the bet and the chip appears on that line.
 - Zero targets to click/check: `split-0-37`, `split-0-1`, `split-37-3`,
-  `street-0-1-2`, `street-37-2-3`, `corner-0-1-2-3`; each should place a chip
-  and the demo/backend should settle it (see `pr_zerobets.mjs`).
+  `street-0-1-2`, `street-37-2-3`, `street-0-37-2`, `corner-0-1-2-3`; each
+  should place a chip and the demo/backend should settle it (see
+  `pr_zerobets.mjs`). The `street-0-37-2` dot must sit on the right end of the
+  0/00 split line (vertical midpoint of the 2 cell).
 - During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
   must render inside its dark/gold box, and the box must be above every
   number, line, dot and chip (screenshot check).
@@ -97,7 +99,8 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
   `.cell.covered`): `red`/`black`/`odd`/`even`/`low`/`high` → 18;
   `dozen-1`/`col-1` → 12; `split-3-6` → 2; `street-1-2-3` → 3;
   `corner-3-6-2-5` → 4; `sixline-1-2-3-4-5-6` → 6; `split-0-37` → 2;
-  pointerover on `#board` clears. Read-only boards stay at 0.
+  `street-0-37-2` → 3; pointerover on `#board` clears. Read-only boards stay
+  at 0.
 - Uniform outside row: the six even-money cells must have equal widths;
   dozens equal; number cells equal.
 - Corner chip: centered on the four-cell intersection, fully visible.

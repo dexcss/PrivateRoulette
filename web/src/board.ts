@@ -295,7 +295,7 @@ export class Board {
   }
 
   /** Creates one visible line/dot target and its per-player chip stack. */
-  private addZone(cell: HTMLElement, target: string, title: string, css: Partial<CSSStyleDeclaration>, kind: string): void {
+  private addZone(cell: HTMLElement, target: string, title: string, css: Partial<CSSStyleDeclaration>, kind: string): HTMLElement {
     const z = document.createElement("div");
     z.className = `cellzone ${kind}`;
     z.title = title;
@@ -317,6 +317,7 @@ export class Board {
       this.cb.remove(target);
     });
     cell.appendChild(z);
+    return z;
   }
 
   /** Per-cell edge overlays: right edge = vertical split, bottom edge =
@@ -373,9 +374,15 @@ export class Board {
     if (!z00 || !one || !two || !three) return;
 
     // 00/0 split on the gap between the stacked zero cells
-    this.addZone(z00, "split-0-37", "Split 0/00", {
+    const zeroSplit = this.addZone(z00, "split-0-37", "Split 0/00", {
       bottom: "-16px", left: "6px", right: "6px", height: "24px",
     }, "zone-split-h");
+
+    // 0/00/2 trio: a dot anchored to the split's right end, not the 2 cell
+    // center, so the horizontal line and the dot share the exact same Y.
+    this.addZone(zeroSplit, "street-0-37-2", "Trio 0/00/2", {
+      right: "-22px", top: "calc(50% - 12px)", width: "24px", height: "24px",
+    }, "zone-corner");
 
     // 0/1 and 00/3 splits on the zero column's right edge
     this.addZone(one, "split-0-1", "Split 0/1", {
