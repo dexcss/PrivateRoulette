@@ -6,7 +6,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import {
-  colorOf, computeResult, cryptoInt, cryptoRandomHex, displayNumber,
+  colorOf, computeResult, cryptoInt, cryptoRandomHex, describeBetTarget, displayNumber,
   isValidBetTarget, isInsideBet, payoutMultiplierForTarget, playerColor,
   DOUBLE_ZERO,
 } from "./fairness";
@@ -87,6 +87,8 @@ interface GameState {
   max_bet_outer: number;
   max_bet_inner_vip: number;
   max_bet_outer_vip: number;
+  max_bet_total: number;
+  max_bet_total_vip: number;
   chip_denominations: number[];
   game_status: "active" | "finished" | "payouts_complete" | "deleted";
   table_locked: boolean;
@@ -295,6 +297,8 @@ export class TableRoom extends DurableObject<Env> {
         max_bet_outer: g.max_bet_outer,
         max_bet_inner_vip: g.max_bet_inner_vip,
         max_bet_outer_vip: g.max_bet_outer_vip,
+        max_bet_total: g.max_bet_total,
+        max_bet_total_vip: g.max_bet_total_vip,
         chip_denominations: g.chip_denominations,
         game_status: g.game_status,
         chat_rate_limit: { max_messages: 1, per_seconds: 2 },
@@ -317,6 +321,8 @@ export class TableRoom extends DurableObject<Env> {
         max_bet_outer: g.max_bet_outer,
         max_bet_inner_vip: g.max_bet_inner_vip,
         max_bet_outer_vip: g.max_bet_outer_vip,
+        max_bet_total: g.max_bet_total,
+        max_bet_total_vip: g.max_bet_total_vip,
         chip_denominations: g.chip_denominations,
         game_status: g.game_status,
         chat_rate_limit: { max_messages: 1, per_seconds: 2 },
@@ -486,6 +492,8 @@ export class TableRoom extends DurableObject<Env> {
       max_bet_outer: clampNum(d.max_bet_outer, 1, 100_000_000, 250000),
       max_bet_inner_vip: clampNum(d.max_bet_inner_vip, 1, 100_000_000, 1000000),
       max_bet_outer_vip: clampNum(d.max_bet_outer_vip, 1, 100_000_000, 500000),
+      max_bet_total: clampNum(d.max_bet_total, 0, 100_000_000, 500000),
+      max_bet_total_vip: clampNum(d.max_bet_total_vip, 0, 100_000_000, 1000000),
       chip_denominations: Array.isArray(d.chip_denominations) && d.chip_denominations.length > 0
         ? d.chip_denominations.map((x: any) => clampNum(x, 1, 10_000_000, 25))
         : [10000, 50000, 100000, 250000, 500000],
@@ -513,6 +521,8 @@ export class TableRoom extends DurableObject<Env> {
       max_bet_outer: g.max_bet_outer,
       max_bet_inner_vip: g.max_bet_inner_vip,
       max_bet_outer_vip: g.max_bet_outer_vip,
+      max_bet_total: g.max_bet_total,
+      max_bet_total_vip: g.max_bet_total_vip,
     });
     this.send(ws, "games_list", { games: await this.listGameSummaries() });
     this.snapshotFor(conn);
@@ -666,6 +676,15 @@ export class TableRoom extends DurableObject<Env> {
     let totalPayouts = 0;
     const roundNo = ++g.round_number;
     const placedAt = nowIso();
+    const winningBets: {
+      player_id: string;
+      player_name: string;
+      bet_type: string;
+      bet_label: string;
+      bet_amount: number;
+      payout: number;
+      net: number;
+    }[] = [];
 
     for (const p of g.players) {
       if (p.left_at) continue;
@@ -678,6 +697,15 @@ export class TableRoom extends DurableObject<Env> {
         if (mult > 0) {
           p.balance += payout;
           totalPayouts += payout;
+          winningBets.push({
+            player_id: p.id,
+            player_name: p.display_name,
+            bet_type: target,
+            bet_label: describeBetTarget(target),
+            bet_amount: amount,
+            payout,
+            net: payout - amount,
+          });
         }
         totalBets += amount;
         g.all_bets.push({
@@ -717,16 +745,17 @@ export class TableRoom extends DurableObject<Env> {
       color,
       dice_roll: diceRoll,
       balances: Object.fromEntries(g.players.filter((p) => !p.left_at).map((p) => [p.id, p.balance])),
+      results: winningBets,
     });
     this.broadcast("table_history", { history: g.history.slice(-25) });
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
     this.broadcastGameState();
 
-    const winners = g.players.filter((p) => !p.left_at && p.last_round_net > 0);
-    if (winners.length > 0) {
-      this.systemChat(`Number ${displayNumber(result)} (${color}) wins! ${winners.map((w) => `${w.display_name} +${w.last_round_net.toLocaleString()}`).join(", ")}`);
+    if (winningBets.length > 0) {
+      const won = winningBets.map((w) => `${w.player_name} +${w.net.toLocaleString()} on ${w.bet_label}`);
+      this.systemChat(`Number ${displayNumber(result)} (${color})! ${won.join("; ")}`);
     } else if (hasBets) {
-      this.systemChat(`Number ${displayNumber(result)} (${color}) wins! House takes the round.`);
+      this.systemChat(`Number ${displayNumber(result)} (${color})! No winning bets — house takes the round.`);
     } else {
       this.systemChat(`Number ${displayNumber(result)} (${color}). No bets this round.`);
     }
@@ -857,6 +886,9 @@ export class TableRoom extends DurableObject<Env> {
     if (alreadyOnSpot + amount > limit) return this.err(ws, `max bet for this spot is ${limit} (you already have ${alreadyOnSpot})`);
 
     const staked = Object.values(p.bets).reduce((a, b) => a + b, 0);
+    const totalLimit = p.is_vip ? (g.max_bet_total_vip ?? 0) : (g.max_bet_total ?? 0);
+    if (totalLimit > 0 && staked + amount > totalLimit)
+      return this.err(ws, `max total bet is ${totalLimit} (you already have ${staked})`);
     if (staked + amount > p.balance) return this.err(ws, "not enough balance");
 
     p.bets[target] = (p.bets[target] ?? 0) + amount;
@@ -1029,6 +1061,8 @@ function dealerStateView(g: GameState, includeKeys = false) {
     max_bet_outer: g.max_bet_outer,
     max_bet_inner_vip: g.max_bet_inner_vip,
     max_bet_outer_vip: g.max_bet_outer_vip,
+    max_bet_total: g.max_bet_total,
+    max_bet_total_vip: g.max_bet_total_vip,
     chip_denominations: g.chip_denominations,
     players: g.players.map((p) => (includeKeys ? { ...publicPlayer(p), player_key: p.player_key } : publicPlayer(p))),
   };

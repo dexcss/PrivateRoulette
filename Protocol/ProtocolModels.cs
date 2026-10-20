@@ -83,6 +83,8 @@ public sealed class GameState
     [JsonProperty("max_bet_outer")] public long MaxBetOuter { get; set; }
     [JsonProperty("max_bet_inner_vip")] public long MaxBetInnerVip { get; set; }
     [JsonProperty("max_bet_outer_vip")] public long MaxBetOuterVip { get; set; }
+    [JsonProperty("max_bet_total")] public long MaxBetTotal { get; set; }
+    [JsonProperty("max_bet_total_vip")] public long MaxBetTotalVip { get; set; }
     [JsonProperty("chip_denominations")] public List<long>? ChipDenominations { get; set; }
     [JsonProperty("game_status")] public string GameStatus { get; set; } = "active";
     [JsonProperty("chat_rate_limit")] public ChatRateLimit ChatRateLimit { get; set; } = new();
@@ -99,6 +101,8 @@ public sealed class GameCreated
     [JsonProperty("max_bet_outer")] public long MaxBetOuter { get; set; }
     [JsonProperty("max_bet_inner_vip")] public long MaxBetInnerVip { get; set; }
     [JsonProperty("max_bet_outer_vip")] public long MaxBetOuterVip { get; set; }
+    [JsonProperty("max_bet_total")] public long MaxBetTotal { get; set; }
+    [JsonProperty("max_bet_total_vip")] public long MaxBetTotalVip { get; set; }
 }
 
 public sealed class PlayerCreated
@@ -142,6 +146,18 @@ public sealed class RoundResult
     [JsonProperty("color")] public string Color { get; set; } = string.Empty;
     [JsonProperty("balances")] public Dictionary<string, long> Balances { get; set; } = new();
     [JsonProperty("dice_roll")] public long? DiceRoll { get; set; }
+    [JsonProperty("results")] public List<RoundBetResult> Results { get; set; } = new();
+}
+
+public sealed class RoundBetResult
+{
+    [JsonProperty("player_id")] public string PlayerId { get; set; } = string.Empty;
+    [JsonProperty("player_name")] public string PlayerName { get; set; } = string.Empty;
+    [JsonProperty("bet_type")] public string BetType { get; set; } = string.Empty;
+    [JsonProperty("bet_label")] public string BetLabel { get; set; } = string.Empty;
+    [JsonProperty("bet_amount")] public long BetAmount { get; set; }
+    [JsonProperty("payout")] public long Payout { get; set; }
+    [JsonProperty("net")] public long Net { get; set; }
 }
 
 public sealed class TableHistoryEntry

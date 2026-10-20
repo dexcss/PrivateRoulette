@@ -112,7 +112,7 @@ canvas { display: block; }
 
 .proof { font-size: 12px; color: var(--muted); text-align: center; min-height: 16px; word-break: break-all; }
 
-.right { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
+.right { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; overflow-y: auto; }
 
 .players { display: flex; flex-wrap: wrap; gap: 8px; }
 .player {
@@ -138,7 +138,7 @@ canvas { display: block; }
 }
 .chip.sel { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 12px rgba(201,162,39,.35); }
 
-.board-outer { position: relative; min-height: 0; flex: 1; }
+.board-outer { position: relative; min-height: 300px; flex: 1; }
 #board { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; height: 100%; }
 
 .cell {

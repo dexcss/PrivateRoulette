@@ -204,7 +204,15 @@ public sealed class MainWindow : Window
 
     private void DrawGameHeaderButtons()
     {
-        if (ImGui.Button("Open web table"))
+        if (ImGui.Button("Copy dealer page"))
+        {
+            ImGui.SetClipboardText(this.session.DealerWebUrl);
+            this.session.Echo("Dealer page copied to clipboard.");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Copy the dealer web console link for this game.");
+        ImGui.SameLine();
+        if (ImGui.Button("Open spectator page"))
             OpenUrl($"https://dexcss.github.io/PrivateRoulette/#/spectate/{this.session.GameId}");
         ImGui.SameLine();
         if (ImGui.Button("Show wheel"))
@@ -243,10 +251,13 @@ public sealed class MainWindow : Window
             selectedMode = (SpinMode)modeInt;
         var maxInner = (int)this.config.MaxBetInner;
         var maxOuter = (int)this.config.MaxBetOuter;
+        var maxTotal = (int)this.config.MaxBetTotal;
         if (ImGui.InputInt("Max bet (inside)", ref maxInner))
             this.config.MaxBetInner = maxInner;
         if (ImGui.InputInt("Max bet (outside)", ref maxOuter))
             this.config.MaxBetOuter = maxOuter;
+        if (ImGui.InputInt("Max bet (total)", ref maxTotal))
+            this.config.MaxBetTotal = maxTotal;
         if (ImGui.Button($"Create {selectedMode} game##createGame"))
         {
             this.session.CreateGame(selectedMode);
@@ -717,15 +728,6 @@ public sealed class SettingsWindow : Window
             this.config.Save();
         }
 
-        MainWindow.SectionText("Interface");
-        var launcher = this.config.ShowLauncherButton;
-        if (ImGui.Checkbox("Show the floating in-game launcher button", ref launcher))
-        {
-            this.config.ShowLauncherButton = launcher;
-            this.config.Save();
-        }
-        ImGui.TextDisabled("The 'Dealer console' button on screen. /pr always opens the console.");
-
         var sounds = this.config.SoundEffects;
         if (ImGui.Checkbox("Sound effects (Phase 2)", ref sounds))
         {
@@ -736,13 +738,17 @@ public sealed class SettingsWindow : Window
         MainWindow.SectionText("Bet limits");
         int mi = (int)this.config.MaxBetInner, mo = (int)this.config.MaxBetOuter;
         int miv = (int)this.config.MaxBetInnerVip, mov = (int)this.config.MaxBetOuterVip;
-        if (ImGui.InputInt("Max inside", ref mi) | ImGui.InputInt("Max outside", ref mo) |
-            ImGui.InputInt("Max inside (VIP)", ref miv) | ImGui.InputInt("Max outside (VIP)", ref mov))
+        int mt = (int)this.config.MaxBetTotal, mtv = (int)this.config.MaxBetTotalVip;
+        if (ImGui.InputInt("Max inside (per spot)", ref mi) | ImGui.InputInt("Max outside (per spot)", ref mo) |
+            ImGui.InputInt("Max inside (VIP)", ref miv) | ImGui.InputInt("Max outside (VIP)", ref mov) |
+            ImGui.InputInt("Max total (per player)", ref mt) | ImGui.InputInt("Max total (VIP)", ref mtv))
         {
             this.config.MaxBetInner = mi;
             this.config.MaxBetOuter = mo;
             this.config.MaxBetInnerVip = miv;
             this.config.MaxBetOuterVip = mov;
+            this.config.MaxBetTotal = mt;
+            this.config.MaxBetTotalVip = mtv;
             this.config.Save();
         }
 

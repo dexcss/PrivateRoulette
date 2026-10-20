@@ -182,6 +182,7 @@ public sealed class RouletteSession : IDisposable
 
     public void CreateGame(SpinMode mode)
         => _ = this.socket.CreateGameAsync(null, mode, this.config.MaxBetInner, this.config.MaxBetOuter, this.config.MaxBetInnerVip, this.config.MaxBetOuterVip,
+            this.config.MaxBetTotal, this.config.MaxBetTotalVip,
             this.config.ChipPresets.FirstOrDefault()?.Values?.Select(v => (long)v).ToArray(),
             CharacterContext.Name, CharacterContext.World);
 
@@ -321,7 +322,8 @@ public sealed class RouletteSession : IDisposable
         if (!this.config.AnnouncePartyResults) return;
         if (this.IsInParty?.Invoke() != true) return;
 
-        _ = System.Threading.Tasks.Task.Delay(450).ContinueWith(_ =>
+        // The wheel animation is 24.4s; hold the chat reveal until it lands.
+        _ = System.Threading.Tasks.Task.Delay(24900).ContinueWith(_ =>
         {
             this.RunOnMainThread?.Invoke(() =>
             {
@@ -329,27 +331,35 @@ public sealed class RouletteSession : IDisposable
                 {
                     var number = Wheel.Display(result.Result);
                     this.RunCommand?.Invoke($"/p Number {number} ({result.Color})!");
+
+                    var wins = result.Results;
+                    if (wins == null || wins.Count == 0)
+                    {
+                        this.RunCommand?.Invoke("/p No winning bets this round.");
+                    }
+                    else
+                    {
+                        var parts = new System.Collections.Generic.List<string>();
+                        foreach (var w in wins)
+                        {
+                            var label = string.IsNullOrWhiteSpace(w.BetLabel) ? w.BetType : w.BetLabel;
+                            parts.Add($"{w.PlayerName} +{w.Net:N0} on {label}");
+                        }
+
+                        SendPartyChunks("Winners", parts, " | ");
+                    }
+
                     var players = this.State?.Players;
                     if (players == null || players.Count == 0) return;
 
-                    var parts = new System.Collections.Generic.List<string>();
+                    var balances = new System.Collections.Generic.List<string>();
                     foreach (var p in players)
                     {
                         var net = p.LastRoundNet >= 0 ? $"+{p.LastRoundNet:N0}" : $"{p.LastRoundNet:N0}";
-                        parts.Add($"{p.DisplayName}: {p.Balance:N0} ({net})");
+                        balances.Add($"{p.DisplayName}: {p.Balance:N0} ({net})");
                     }
 
-                    var line = "Balances — " + string.Join(" | ", parts);
-                    while (line.Length > 240)
-                    {
-                        var cut = line.LastIndexOf(" | ", 240, StringComparison.Ordinal);
-                        if (cut < 0) cut = Math.Min(240, line.Length);
-                        this.RunCommand?.Invoke($"/p {line[..cut]}");
-                        line = cut + 3 <= line.Length ? "Balances — " + line[(cut + 3)..] : string.Empty;
-                        if (line.Length <= "Balances — ".Length) return;
-                    }
-
-                    if (line.Length > 0) this.RunCommand?.Invoke($"/p {line}");
+                    SendPartyChunks("Balances", balances, " | ");
                 }
                 catch
                 {
@@ -357,6 +367,23 @@ public sealed class RouletteSession : IDisposable
                 }
             });
         });
+    }
+
+    /// <summary>Sends a party line, splitting long lists across several messages.</summary>
+    private void SendPartyChunks(string prefix, System.Collections.Generic.List<string> parts, string separator)
+    {
+        if (parts.Count == 0) return;
+        var line = $"{prefix}: " + string.Join(separator, parts);
+        while (line.Length > 240)
+        {
+            var cut = line.LastIndexOf(separator, 240, StringComparison.Ordinal);
+            if (cut < 0) cut = Math.Min(240, line.Length);
+            this.RunCommand?.Invoke($"/p {line[..cut]}");
+            line = cut + separator.Length <= line.Length ? $"{prefix}: " + line[(cut + separator.Length)..] : string.Empty;
+            if (line.Length <= prefix.Length + 3) return;
+        }
+
+        if (line.Length > 0) this.RunCommand?.Invoke($"/p {line}");
     }
     /// <summary>Whispers the player their invite link via /tell.</summary>
     public void SendLink(PlayerState player)
@@ -372,6 +399,11 @@ public sealed class RouletteSession : IDisposable
     /// <summary>Player betting link for the given player.</summary>
     public string? PlayerLink(PlayerState player)
         => player.PlayerKey == null ? null : $"https://dexcss.github.io/PrivateRoulette/#/{this.GameId}/{player.PlayerKey}";
+
+    /// <summary>Dealer web console link for the current game (copied from the plugin UI).</summary>
+    public string DealerWebUrl => this.GameId == null
+        ? "https://dexcss.github.io/PrivateRoulette/#/dealer"
+        : $"https://dexcss.github.io/PrivateRoulette/#/dealer/{this.GameId}";
 
     public void Dispose()
     {

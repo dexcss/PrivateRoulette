@@ -30,6 +30,8 @@ export interface GameStateMsg {
   max_bet_outer: number;
   max_bet_inner_vip: number;
   max_bet_outer_vip: number;
+  max_bet_total: number;
+  max_bet_total_vip: number;
   chip_denominations: number[];
   players: PublicPlayer[];
 }

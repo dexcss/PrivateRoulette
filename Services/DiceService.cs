@@ -25,10 +25,12 @@ public sealed partial class DiceService : IDisposable
     private readonly IPlayerState playerState;
     private readonly IPluginLog log;
 
-    // Recovered from the original plugin's constant pool (see dumps/decoded_strings.txt).
-    // EN: "Random! (1-1000) 530"  |  "Random! 530"
+    // EN: "Random! (1-1000) 530"  |  "Random! 530"  |  "Random! You roll a 437."
     [GeneratedRegex(@"^Random!\s*\(1-(\d{1,4})\)\s+(\d{1,4})$")]
     private static partial Regex EnRollFull();
+
+    [GeneratedRegex(@"^Random!\s+You roll a\s+(\d{1,4})", RegexOptions.IgnoreCase)]
+    private static partial Regex EnRollYouRoll();
 
     [GeneratedRegex(@"^Random!\s+(\d{1,4})")]
     private static partial Regex EnRollShort();
@@ -54,6 +56,10 @@ public sealed partial class DiceService : IDisposable
     /// <summary>Parses a dice roll value from a system chat line; null when the line is not a roll.</summary>
     public static long? ParseDiceRoll(string message)
     {
+        var modern = EnRollYouRoll().Match(message);
+        if (modern.Success && long.TryParse(modern.Groups[1].Value, out var mv))
+            return MapRoll(mv);
+
         foreach (var rx in new[] { EnRollFull(), DeRollFull(), FrRollFull() })
         {
             var m = rx.Match(message);

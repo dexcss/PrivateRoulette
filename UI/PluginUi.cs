@@ -16,33 +16,20 @@ public sealed class PluginUi : IDisposable
     private readonly MainWindow main;
     private readonly SettingsWindow settings;
     private readonly WheelWindow wheel;
-    private readonly LauncherWindow launcher;
-    private readonly PluginConfig config;
     private readonly IPluginLog log;
 
     public PluginUi(IDalamudPluginInterface pluginInterface, PluginConfig config, SocketService socket, RouletteSession session, IPluginLog log)
     {
         this.log = log;
-        this.config = config;
         this.wheel = new WheelWindow(config, session, log);
         this.main = new MainWindow(config, socket, session, log, this.ShowWheel);
-        this.wheel.OpenMain = this.OpenMain;
         this.settings = new SettingsWindow(config);
-        this.launcher = new LauncherWindow(config, this.OpenMain);
         this.windowSystem.AddWindow(this.main);
         this.windowSystem.AddWindow(this.wheel);
         this.windowSystem.AddWindow(this.settings);
-        this.windowSystem.AddWindow(this.launcher);
-        pluginInterface.UiBuilder.Draw += this.DrawAll;
+        pluginInterface.UiBuilder.Draw += this.windowSystem.Draw;
         pluginInterface.UiBuilder.OpenConfigUi += this.OpenSettings;
         pluginInterface.UiBuilder.OpenMainUi += this.OpenMain;
-    }
-
-    private void DrawAll()
-    {
-        // Keep the launcher in sync with the settings checkbox.
-        this.launcher.IsOpen = this.config.ShowLauncherButton;
-        this.windowSystem.Draw();
     }
 
     public void ShowWheel()

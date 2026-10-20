@@ -174,3 +174,30 @@ export function playerColor(id: string): string {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return PLAYER_COLORS[h % PLAYER_COLORS.length];
 }
+
+/** Human-readable label for a bet target, used in result announcements. */
+export function describeBetTarget(t: string): string {
+  const nums = (s: string) => s.split("-").map((x) => displayNumber(Number(x)));
+  if (t.startsWith("n-")) return `straight ${displayNumber(Number(t.slice(2)))}`;
+  if (t.startsWith("split-")) return `split ${nums(t.slice(6)).join("/")}`;
+  if (t.startsWith("street-")) return `street ${nums(t.slice(7)).join("-")}`;
+  if (t.startsWith("corner-")) return `corner ${nums(t.slice(7)).join("/")}`;
+  if (t.startsWith("sixline-")) {
+    const n = nums(t.slice(8));
+    return `six-line ${n[0]}-${n[2]}/${n[3]}-${n[5]}`;
+  }
+  if (t.startsWith("dozen-")) return `dozen ${t.slice(6)}`;
+  if (t.startsWith("col-")) return `column ${t.slice(4)}`;
+  switch (t) {
+    case "topline": return "top line 0-00-1-2-3";
+    case "firstfour": return "first four";
+    case "low": return "1-18";
+    case "high": return "19-36";
+    case "red": return "red";
+    case "black": return "black";
+    case "odd": return "odd";
+    case "even": return "even";
+    default: return t;
+  }
+}
+

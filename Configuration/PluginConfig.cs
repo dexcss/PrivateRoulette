@@ -77,6 +77,8 @@ public sealed class PluginConfig : IPluginConfiguration
     [JsonProperty("MaxBetOuter")] public int MaxBetOuter { get; set; } = 250000;
     [JsonProperty("MaxBetInnerVip")] public int MaxBetInnerVip { get; set; } = 1000000;
     [JsonProperty("MaxBetOuterVip")] public int MaxBetOuterVip { get; set; } = 500000;
+    [JsonProperty("MaxBetTotal")] public int MaxBetTotal { get; set; } = 500000;
+    [JsonProperty("MaxBetTotalVip")] public int MaxBetTotalVip { get; set; } = 1000000;
     [JsonProperty("ChipPresets")]
     public List<ChipPreset> ChipPresets { get; set; } = new()
     {
@@ -112,7 +114,6 @@ public sealed class PluginConfig : IPluginConfiguration
     [JsonProperty("SoundEffects")] public bool SoundEffects { get; set; } = true;
     [JsonProperty("AutoOpenWheelOnSpin")] public bool AutoOpenWheelOnSpin { get; set; } = true;
     [JsonProperty("AnnouncePartyResults")] public bool AnnouncePartyResults { get; set; } = true;
-    [JsonProperty("ShowLauncherButton")] public bool ShowLauncherButton { get; set; } = true;
     [JsonProperty("VerboseWireLog")] public bool VerboseWireLog { get; set; } = true;
     [JsonProperty("TradeThrottleMs")] public int TradeThrottleMs { get; set; } = 800;
 

@@ -47,6 +47,7 @@ let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
 let dealerGames: any[] = [];
 let lastLedger: any = null;
 const playerKeys = new Map<string, string>();
+const shownBalances = new Map<string, number>();
 
 // ---------- dom ----------
 
@@ -80,11 +81,12 @@ const dealerBar = $("#dealer-bar");
 
 // ---------- landing ----------
 
-function parseHash(): { gameId: string; playerKey: string; spectate: boolean } | null {
-  // #/{gameId}/{playerKey}  or  #/spectate/{gameId}
+function parseHash(): { gameId: string; playerKey: string; spectate: boolean; dealer?: boolean } | null {
+  // #/{gameId}/{playerKey}  |  #/spectate/{gameId}  |  #/dealer/{gameId}
   const h = location.hash.replace(/^#\/?/, "");
   if (!h) return null;
   const parts = h.split("/").map(decodeURIComponent);
+  if (parts[0] === "dealer") return { gameId: parts[1] ?? "", playerKey: "", spectate: false, dealer: true };
   if (parts[0] === "spectate" && parts[1]) return { gameId: parts[1], playerKey: "", spectate: true };
   if (parts.length >= 2) return { gameId: parts[0], playerKey: parts[1], spectate: false };
   return null;
@@ -153,12 +155,15 @@ api.on("hello_ok", (d) => {
   }
   if (d.role === "dealer") {
     role = "dealer";
-    // stay on the landing page and show the games panel
-    viewLanding.hidden = false;
-    viewTable.hidden = true;
     dealerCard.hidden = false;
     (dealerTokenInput as HTMLInputElement).value = dealerToken;
     statusLabel.textContent = "dealer connected";
+    if (gameId) {
+      openDealerTable();
+    } else {
+      viewLanding.hidden = false;
+      viewTable.hidden = true;
+    }
   }
 });
 
@@ -206,11 +211,16 @@ api.on("table_history", (d: { history: HistoryEntry[] }) => {
 
 api.on("chat_history", (d: { messages: any[] }) => {
   chatLog.innerHTML = "";
+  deferredChat.length = 0;
   d.messages.forEach(addChatLine);
   scrollChat();
 });
 
-api.on("chat_message", addChatLine);
+const deferredChat: any[] = [];
+api.on("chat_message", (m: any) => {
+  if (wheel?.isSpinning || pendingRound || state?.spinning) deferredChat.push(m);
+  else addChatLine(m);
+});
 
 api.on("spin", (d) => {
   if (!wheel) return;
@@ -241,6 +251,8 @@ function revealRound(): void {
     }
   }
   renderBalance(lastPlayers, true);
+  renderPlayers(lastPlayers);
+  for (const m of deferredChat.splice(0)) addChatLine(m);
 }
 
 api.on("bets_updated", (d: { bets: Record<string, number> }) => {
@@ -299,11 +311,14 @@ function renderState() {
   if (board && state.chip_denominations?.length) {
     renderChips(state.chip_denominations);
   }
-  const limits = document.getElementById("limits");
+    const limits = document.getElementById("limits");
   if (limits) {
+    const total = state.max_bet_total ?? 0;
+    const totalVip = state.max_bet_total_vip ?? 0;
     limits.textContent =
-      `max inside ${state.max_bet_inner.toLocaleString()} · outside ${state.max_bet_outer.toLocaleString()}` +
-      ` · VIP ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()}`;
+      `max per spot: inside ${state.max_bet_inner.toLocaleString()} · outside ${state.max_bet_outer.toLocaleString()}` +
+      ` · max total: ${total > 0 ? total.toLocaleString() : "off"}` +
+      ` · VIP: ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()}/${totalVip > 0 ? totalVip.toLocaleString() : "off"}`;
   }
   if (role === "spectator") statusLabel.textContent = "spectating";
   boardEl.classList.toggle("readonly", role !== "player");
@@ -371,7 +386,8 @@ function betChips(players: PublicPlayer[]): BetChip[] {
 
 function renderBalance(players: PublicPlayer[], force = false) {
   if (!me) return;
-  if (!force && wheel?.isSpinning && pendingRound) return; // hold the reveal until the wheel settles
+  // Hold the new balance and win/loss flash until the wheel lands.
+  if (!force && (wheel?.isSpinning || pendingRound || state?.spinning)) return;
   const mine = players.find((p) => p.id === me!.playerId);
   if (mine) {
     const staked = Object.values(mine.bets ?? {}).reduce((a, b) => a + b, 0);
@@ -379,9 +395,10 @@ function renderBalance(players: PublicPlayer[], force = false) {
     balanceLabel.textContent = `${mine.balance.toLocaleString()} gil · ${left.toLocaleString()} left`;
     const limitsEl = document.getElementById("limits");
     if (limitsEl && state) {
+      const total = state.max_bet_total ?? 0;
       limitsEl.textContent =
-        `max inside ${state.max_bet_inner.toLocaleString()} · outside ${state.max_bet_outer.toLocaleString()}` +
-        ` · VIP ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()} · staked ${staked.toLocaleString()}`;
+        `max per spot ${state.max_bet_inner.toLocaleString()} · max total ${total > 0 ? total.toLocaleString() : "off"}` +
+        ` · staked ${staked.toLocaleString()}`;
     }
     prevBalance = mine.balance;
     lastNet.textContent = mine.last_round_net === 0 ? "" : mine.last_round_net > 0 ? `▲ ${mine.last_round_net.toLocaleString()}` : `▼ ${Math.abs(mine.last_round_net).toLocaleString()}`;
@@ -400,19 +417,23 @@ function renderPlayers(players: PublicPlayer[]) {
          </span>`
       : "";
 
-  playersList.innerHTML = players
-    .map(
-      (p) => `
+    playersList.innerHTML = players
+    .map((p) => {
+      // Freeze displayed balances while the wheel is spinning; reveal on landing.
+      const frozen = !!wheel?.isSpinning || !!pendingRound || !!state?.spinning;
+      const bal = frozen ? (shownBalances.get(p.id) ?? p.balance) : p.balance;
+      if (!frozen) shownBalances.set(p.id, p.balance);
+      return `
       <div class="player ${p.away ? "away" : ""}" style="border-color:${p.color}66">
         <span class="dot" style="background:${p.color}"></span>
         <span class="pname">${escapeHtml(p.display_name)}</span>
         ${p.ready ? '<span class="tag ready">ready</span>' : ""}
         ${p.is_vip ? '<span class="tag vip">vip</span>' : ""}
-        <span class="pbets">${Object.entries(p.bets).map(([t, a]) => `${a.toLocaleString()}`).join(" · ") || ""}</span>
-        <span class="pbal">${p.balance.toLocaleString()}</span>
+        <span class="pbets">${Object.entries(p.bets).map(([t, a]) => `${a.toLocaleString()}`).join(" / ") || ""}</span>
+        <span class="pbal">${bal.toLocaleString()}</span>
         ${dealerActions(p)}
-      </div>`,
-    )
+      </div>`;
+    })
     .join("");
 }
 
@@ -559,6 +580,8 @@ $("#dealer-create").addEventListener("click", () => {
     max_bet_outer: 250000,
     max_bet_inner_vip: 1000000,
     max_bet_outer_vip: 500000,
+    max_bet_total: 500000,
+    max_bet_total_vip: 1000000,
   });
 });
 
@@ -692,12 +715,28 @@ board = new Board(boardEl, {
 
 const auto = parseHash();
 if (auto) {
-  role = auto.spectate ? "spectator" : "player";
-  gameId = auto.gameId;
-  playerKey = auto.playerKey;
-  ($("#join-game") as HTMLInputElement).value = auto.gameId;
-  (  $("#join-key") as HTMLInputElement).value = auto.playerKey;
-  tryAutoJoin();
+  if (auto.dealer) {
+    role = "dealer";
+    gameId = auto.gameId ?? "";
+    playerKey = "";
+    if (gameId) ($("#join-game") as HTMLInputElement).value = gameId;
+    if (dealerToken) {
+      api.connect();
+      if (gameId) showConnecting();
+      else { viewLanding.hidden = false; dealerCard.hidden = false; }
+    } else {
+      viewLanding.hidden = false;
+      dealerCard.hidden = false;
+      statusLabel.textContent = "enter your dealer token to open this table";
+    }
+  } else {
+    role = auto.spectate ? "spectator" : "player";
+    gameId = auto.gameId;
+    playerKey = auto.playerKey;
+    ($("#join-game") as HTMLInputElement).value = auto.gameId;
+    (  $("#join-key") as HTMLInputElement).value = auto.playerKey;
+    tryAutoJoin();
+  }
 }
 
 function flashResult(text: string, positive: boolean): void {

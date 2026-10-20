@@ -376,7 +376,7 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
 
     public Task ListGamesAsync() => this.SendAsync("list_games");
 
-    public Task CreateGameAsync(string? theme, SpinMode mode, long maxInner, long maxOuter, long maxInnerVip, long maxOuterVip, long[]? chips, string dealerName, string dealerWorld)
+    public Task CreateGameAsync(string? theme, SpinMode mode, long maxInner, long maxOuter, long maxInnerVip, long maxOuterVip, long maxTotal, long maxTotalVip, long[]? chips, string dealerName, string dealerWorld)
         => this.SendAsync("create_game", new
         {
             theme,
@@ -385,6 +385,8 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
             max_bet_outer = maxOuter,
             max_bet_inner_vip = maxInnerVip,
             max_bet_outer_vip = maxOuterVip,
+            max_bet_total = maxTotal,
+            max_bet_total_vip = maxTotalVip,
             chip_denominations = chips,
             dealer_name = dealerName,
             dealer_world = dealerWorld,
