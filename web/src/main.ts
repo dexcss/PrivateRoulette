@@ -480,6 +480,7 @@ function renderPlayers(players: PublicPlayer[]) {
            <button data-act="plus" data-id="${p.id}" title="+100k">+100k</button>
            <button data-act="minus" data-id="${p.id}" title="-100k">-100k</button>
            <button data-act="cashout" data-id="${p.id}" title="Settle and remove">Cash out</button>
+           <button data-act="vip" data-id="${p.id}" title="${p.is_vip ? "Remove VIP" : "Mark as VIP"}">${p.is_vip ? "UnVIP" : "VIP"}</button>
            <button data-act="link" data-id="${p.id}" title="Copy invite link">Link</button>
          </span>`
       : "";
@@ -750,6 +751,10 @@ playersList.addEventListener("click", (e) => {
   if (act === "plus") api.send("adjust_balance", { player_id: id, delta: 100000, game_id: gameId });
   if (act === "minus") api.send("adjust_balance", { player_id: id, delta: -100000, game_id: gameId });
   if (act === "cashout") api.send("cashout_player", { player_id: id, game_id: gameId });
+  if (act === "vip") {
+    const p = lastPlayers.find((x) => x.id === id);
+    if (p) api.send("set_player_vip", { player_id: id, is_vip: !p.is_vip, game_id: gameId });
+  }
   if (act === "link") {
     const key = playerKeys.get(id);
     if (key) {

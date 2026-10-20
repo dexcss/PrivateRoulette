@@ -305,7 +305,7 @@ public sealed class MainWindow : Window
             ImGui.TableSetupColumn("Balance", ImGuiTableColumnFlags.WidthFixed, 90);
             ImGui.TableSetupColumn("Bets", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 90);
-            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 340);
+            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 390);
             ImGui.TableHeadersRow();
 
             foreach (var p in state.Players)
@@ -367,6 +367,11 @@ public sealed class MainWindow : Window
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Cash"))
                     this.session.CashoutPlayer(p.Id);
+                ImGui.SameLine();
+                if (ImGui.SmallButton(p.IsVip ? "UnVIP" : "VIP"))
+                    this.session.SetPlayerVip(p.Id, !p.IsVip);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(p.IsVip ? "Remove VIP status" : "Mark this player as VIP (higher bet caps)");
                 ImGui.PopID();
             }
 

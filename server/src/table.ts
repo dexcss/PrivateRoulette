@@ -385,6 +385,7 @@ export class TableRoom extends DurableObject<Env> {
         // ================= dealer =================
         case "add_player": await this.addPlayer(ws, d); break;
         case "adjust_balance": await this.adjustBalance(ws, d); break;
+        case "set_player_vip": await this.setPlayerVip(ws, d); break;
         case "record_payout": await this.recordPayout(ws, d); break;
         case "request_spin": await this.requestSpin(ws); break;
         case "spin": await this.spin(ws, d); break;
@@ -579,6 +580,18 @@ export class TableRoom extends DurableObject<Env> {
     this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
     this.broadcastGameState();
     this.systemChat(`${displayName} joined the table.`);
+  }
+
+  private async setPlayerVip(ws: WebSocket, d: any): Promise<void> {
+    const g = this.state!;
+    const p = g.players.find((x) => x.id === String(d.player_id ?? ""));
+    if (!p) return this.err(ws, "player not found");
+    p.is_vip = !!d.is_vip;
+    await this.save();
+    this.broadcast("public_bets", { players: g.players.map(publicPlayer) });
+    this.broadcastGameState();
+    this.systemChat(`${p.display_name} is ${p.is_vip ? "now VIP" : "no longer VIP"}.`);
+    this.send(ws, "dealer_ok", { message: `${p.display_name} VIP: ${p.is_vip ? "on" : "off"}` });
   }
 
   private async adjustBalance(ws: WebSocket, d: any): Promise<void> {

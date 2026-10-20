@@ -204,6 +204,12 @@ public sealed class RouletteSession : IDisposable
         _ = this.socket.AdjustBalanceAsync(playerId, delta, this.GameId);
     }
 
+    public void SetPlayerVip(string playerId, bool isVip)
+    {
+        if (this.GameId == null) return;
+        _ = this.socket.SetPlayerVipAsync(playerId, isVip, this.GameId);
+    }
+
     public void CashoutPlayer(string playerId)
     {
         if (this.GameId == null) return;

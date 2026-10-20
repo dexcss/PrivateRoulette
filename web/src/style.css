@@ -145,10 +145,12 @@ canvas { display: block; }
   position: relative; border-radius: 6px; cursor: pointer; user-select: none;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid rgba(255,255,255,.12);
-  transition: filter .1s ease;
+  transition: box-shadow .1s ease;
   min-height: 44px;
 }
-.cell:hover { filter: brightness(1.35); }
+/* No `filter` here: filter creates a stacking context on the hovered cell,
+   which lets the neighbouring cells paint over corner/split chips. */
+.cell:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); }
 .cell .label { font-weight: 700; font-size: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .cell.outside .label { font-size: 12px; letter-spacing: .8px; }
 
@@ -184,15 +186,15 @@ canvas { display: block; }
    They sit on the lines between cells and glow on hover so the target
    is obvious. z-index keeps corners above the edges they overlap. */
 .cellzone {
-  z-index: 5;
-  border-radius: 5px;
+  z-index: 8;
+  border-radius: 999px;
   background: transparent;
   cursor: pointer;
   transition: background .08s ease, box-shadow .08s ease;
 }
 .cellzone:hover {
-  background: rgba(243, 212, 124, .55);
-  box-shadow: 0 0 10px rgba(243, 212, 124, .85);
+  background: rgba(243, 212, 124, .75);
+  box-shadow: 0 0 14px rgba(243, 212, 124, .95);
 }
 
 .board-hint {
@@ -206,7 +208,7 @@ canvas { display: block; }
 /* Spectators and the dealer watch the table; they can't place bets. */
 #board.readonly .cell,
 #board.readonly .cellzone { cursor: default; }
-#board.readonly .cell:hover { filter: none; }
+#board.readonly .cell:hover { box-shadow: none; }
 #board.readonly .cellzone:hover { background: transparent; box-shadow: none; }
 
 #betting-blocker {

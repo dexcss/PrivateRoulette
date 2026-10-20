@@ -400,6 +400,9 @@ public sealed class SocketService : IDisposable, IAsyncDisposable
     public Task AdjustBalanceAsync(string playerId, long delta, string gameId, string reason = "Dealer adjustment")
         => this.SendAsync("adjust_balance", new { player_id = playerId, delta, reason, game_id = gameId });
 
+    public Task SetPlayerVipAsync(string playerId, bool isVip, string gameId)
+        => this.SendAsync("set_player_vip", new { player_id = playerId, is_vip = isVip, game_id = gameId });
+
     public Task GetLedgerAsync(string gameId) => this.SendAsync("get_ledger", new { game_id = gameId });
 
     public Task GetStatsAsync() => this.SendAsync("get_stats");
