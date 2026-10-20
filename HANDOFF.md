@@ -90,8 +90,8 @@ by attacking it with a real player socket (all dealer events rejected).
 has a visible thin champagne line or small dot hit target (subtle at rest,
 bright gold on hover); the top-row mirrors and the TOP cell were removed (the
 backend still accepts `topline`, but the board does not expose it); the zero
-column supports 0/00, 0/1 and 00/3 splits, 0-1-2 / 00-2-3 / 0-00-2 trios and
-first four; hovering any bet glows every number it covers (Red → all 18 red cells,
+column supports 0/00, 0/1, 00/3, 0/2 and 00/2 splits, 0-1-2 / 00-2-3 / 0-00-2
+trios and first four; hovering any bet glows every number it covers (Red → all 18 red cells,
 dozens/columns → 12, splits/streets/corners/six-lines → their numbers); and
 the spin blocker is a `z-index: 60` gold-bordered box that covers every cell,
 line, dot and chip. Web-only deploy — the plugin/backend versions are

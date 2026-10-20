@@ -187,8 +187,8 @@ the spin and flushes it in `revealRound()`.
   targets are **visible lines/dots** drawn by `.cellzone::before` inside 24px
   per-cell overlays centered on the middle of the 8px grid gap (a 4px offset
   from the cell edge). Street/six-line targets are on the bottom perimeter
-  only. The zero column adds the 0/00 split, 0/1 and 00/3 splits, the
-  0-1-2 / 00-2-3 / 0-00-2 trios and first four (0/1/2/3). Zones are above cells
+  only. The zero column adds the 0/00 split, 0/1, 00/3, 0/2 and 00/2 splits,
+  the 0-1-2 / 00-2-3 / 0-00-2 trios and first four (0/1/2/3). Zones are above cells
   (`z-index: 8`); avoid `filter` on hover
   (stacking context clips chips). Hovering any cell or line/dot adds `.covered`
   to every number cell the bet covers (red/black, odd/even, low/high,

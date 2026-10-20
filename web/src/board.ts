@@ -392,6 +392,16 @@ export class Board {
       left: "-16px", top: "8px", bottom: "8px", width: "24px",
     }, "zone-split-v");
 
+    // Short 00/2 and 0/2 split lines on the same boundary, from the 00-2-3
+    // dot through the 0-00-2 dot to the 0-1-2 dot. These are intentionally
+    // short so the 0/00/2 T-junction stays legible.
+    this.addZone(two, "split-37-2", "Split 00/2", {
+      left: "-16px", top: "-4px", width: "24px", height: "calc(50% + 3px)",
+    }, "zone-split-v zone-split-short");
+    this.addZone(two, "split-0-2", "Split 0/2", {
+      left: "-16px", top: "calc(50% - 1px)", width: "24px", height: "calc(50% + 5px)",
+    }, "zone-split-v zone-split-short");
+
     // 0/1/2 and 00/2/3 trios at the junctions either side of the 2 cell
     this.addZone(two, "street-0-1-2", "Trio 0/1/2", {
       left: "-16px", bottom: "-16px", width: "24px", height: "24px",
