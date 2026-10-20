@@ -49,6 +49,14 @@ type PendingBet =
 let serverMyBets: Record<string, number> = {};
 let pendingBets: PendingBet[] = [];
 let renderQueued = false;
+
+// Sample players for the no-backend demo view.
+const DEMO_PLAYERS: PublicPlayer[] = [
+  { id: "demo1", name: "Aria@Adamantoise", display_name: "Aria", color: "#E74C3C", chip_style: "classic", bets: { "n-17": 50000, "split-3-6": 25000, red: 25000 }, ready: true, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 1000000 },
+  { id: "demo2", name: "Bex@Adamantoise", display_name: "Bex", color: "#3498DB", chip_style: "classic", bets: { "corner-3-6-2-5": 100000, "street-4-5-6": 50000, "sixline-1-2-3-4-5-6": 100000 }, ready: true, away: false, is_vip: true, is_freeplay: false, last_round_net: 0, balance: 2500000 },
+  { id: "demo3", name: "Cid@Adamantoise", display_name: "Cid", color: "#2ECC71", chip_style: "classic", bets: { "n-0": 25000, black: 100000, topline: 50000 }, ready: false, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 500000 },
+];
+let demoMode = false;
 let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
 let dealerGames: any[] = [];
 let lastLedger: any = null;
@@ -87,11 +95,12 @@ const dealerBar = $("#dealer-bar");
 
 // ---------- landing ----------
 
-function parseHash(): { gameId: string; playerKey: string; spectate: boolean; dealer?: boolean; dealerToken?: string } | null {
-  // #/{gameId}/{playerKey}  |  #/spectate/{gameId}  |  #/dealer/{gameId}/{token}
+function parseHash(): { gameId: string; playerKey: string; spectate: boolean; dealer?: boolean; dealerToken?: string; demo?: boolean } | null {
+  // #/{gameId}/{playerKey}  |  #/spectate/{gameId}  |  #/dealer/{gameId}/{token}  |  #/demo
   const h = location.hash.replace(/^#\/?/, "");
   if (!h) return null;
   const parts = h.split("/").map(decodeURIComponent);
+  if (parts[0] === "demo") return { gameId: "", playerKey: "", spectate: false, demo: true };
   if (parts[0] === "dealer") {
     return {
       gameId: parts[1] && parts[1] !== "-" ? parts[1] : "",
@@ -131,6 +140,11 @@ $("#spectate-btn").addEventListener("click", () => {
 $("#open-settings").addEventListener("click", () => {
   ($("#api-url-input") as HTMLInputElement).value = settings.apiUrl;
   settingsDlg.showModal();
+});
+$("#demo-link")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  location.hash = "#/demo";
+  location.reload();
 });
 $("#settings-save").addEventListener("click", (e) => {
   e.preventDefault();
@@ -792,7 +806,9 @@ board = new Board(boardEl, {
 
 const auto = parseHash();
 if (auto) {
-  if (auto.dealer) {
+  if (auto.demo) {
+    startDemo();
+  } else if (auto.dealer) {
     role = "dealer";
     gameId = auto.gameId ?? "";
     playerKey = "";
@@ -821,6 +837,52 @@ if (auto) {
     (  $("#join-key") as HTMLInputElement).value = auto.playerKey;
     tryAutoJoin();
   }
+}
+
+// ---------- demo mode (view the table + wheel with no backend / no game) ----------
+
+function startDemo(): void {
+  demoMode = true;
+  role = "spectator";
+  gameId = "";
+  playerKey = "";
+  viewLanding.hidden = true;
+  viewLocked.hidden = true;
+  viewTable.hidden = false;
+  wheel?.refreshSize();
+  state = {
+    spinning: false,
+    table_locked: false,
+    awaiting_dice: false,
+    spin_mode: "control",
+    control_number: "demo",
+    creator_name: "Demo",
+    creator_homeworld: "Adamantoise",
+    game_status: "active",
+    max_bet_inner: 500000,
+    max_bet_outer: 250000,
+    max_bet_inner_vip: 1000000,
+    max_bet_outer_vip: 500000,
+    max_bet_total: 500000,
+    max_bet_total_vip: 1000000,
+    chip_denominations: [10000, 50000, 100000, 250000, 500000],
+    players: DEMO_PLAYERS,
+  };
+  lastPlayers = DEMO_PLAYERS;
+  serverMyBets = {};
+  pendingBets = [];
+  renderState();
+  queueRender();
+  statusLabel.textContent = "demo — watching the wheel";
+  demoSpin();
+}
+
+function demoSpin(): void {
+  if (!demoMode) return;
+  wheel?.spinTo(Math.floor(Math.random() * 38), 24400);
+  window.setTimeout(() => {
+    if (demoMode) demoSpin();
+  }, 24400 + 2800);
 }
 
 function flashResult(text: string, positive: boolean): void {
