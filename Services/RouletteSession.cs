@@ -27,6 +27,9 @@ public sealed class RouletteSession : IDisposable
     /// <summary>Executes a game chat command — set by the plugin.</summary>
     public Action<string>? RunCommand { get; set; }
 
+    /// <summary>Sends a chat line through the game's chat entry — set by the plugin.</summary>
+    public Action<string>? SendChatText { get; set; }
+
     // ---- connection state ----
     public bool Authenticated { get; private set; }
     public string AuthMessage { get; private set; } = string.Empty;
@@ -360,7 +363,10 @@ public sealed class RouletteSession : IDisposable
     {
         var link = this.PlayerLink(player);
         if (link == null) return;
-        this.RunCommand?.Invoke($"/tell {player.Name} {link}");
+        if (this.SendChatText != null)
+            this.SendChatText($"/tell {player.Name} {link}");
+        else
+            this.RunCommand?.Invoke($"/tell {player.Name} {link}");
     }
 
     /// <summary>Player betting link for the given player.</summary>

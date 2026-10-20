@@ -28,6 +28,7 @@ export class Board {
   private root: HTMLElement;
   private chipOnTarget = new Map<string, number>();
   private cells = new Map<string, HTMLElement>();
+  private zones = new Map<string, HTMLElement>();
   selectedChip = 10000;
   private cb: BoardCallbacks;
 
@@ -49,6 +50,14 @@ export class Board {
         } else {
           chipEl.style.display = "none";
         }
+      }
+    }
+    for (const [target, el] of this.zones) {
+      const chipEl = el.querySelector(".chipstack") as HTMLElement | null;
+      const amt = bets[target] ?? 0;
+      if (chipEl) {
+        chipEl.textContent = amt > 0 ? formatGil(amt) : "";
+        chipEl.style.display = amt > 0 ? "flex" : "none";
       }
     }
     this.chipOnTarget = new Map(Object.entries(bets));
@@ -193,7 +202,14 @@ export class Board {
       z.dataset.target = target;
       z.style.position = "absolute";
       z.style.pointerEvents = "auto";
-      z.style.opacity = "0";
+      z.style.background = "transparent";
+      z.addEventListener("mouseenter", () => (z.style.background = "rgba(201,162,39,0.45)"));
+      z.addEventListener("mouseleave", () => (z.style.background = "transparent"));
+      const zchip = document.createElement("div");
+      zchip.className = "chipstack gutter-chip";
+      zchip.style.display = "none";
+      z.appendChild(zchip);
+      this.zones.set(target, z);
       z.addEventListener("click", (e) => {
         if (e.shiftKey) this.cb.remove(target);
         else this.cb.place(target);

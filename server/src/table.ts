@@ -853,7 +853,8 @@ export class TableRoom extends DurableObject<Env> {
     const limit = p.is_vip
       ? (isInsideBet(target) ? g.max_bet_inner_vip : g.max_bet_outer_vip)
       : (isInsideBet(target) ? g.max_bet_inner : g.max_bet_outer);
-    if (amount > limit) return this.err(ws, `max bet for this spot is ${limit}`);
+    const alreadyOnSpot = p.bets[target] ?? 0;
+    if (alreadyOnSpot + amount > limit) return this.err(ws, `max bet for this spot is ${limit} (you already have ${alreadyOnSpot})`);
 
     const staked = Object.values(p.bets).reduce((a, b) => a + b, 0);
     if (staked + amount > p.balance) return this.err(ws, "not enough balance");

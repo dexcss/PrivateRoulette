@@ -348,7 +348,11 @@ public sealed class MainWindow : Window
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip("Copy the invite link");
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Tell"))
+                {
+                    var invite = this.session.PlayerLink(p);
+                    if (invite != null) ImGui.SetClipboardText(invite);
                     this.session.SendLink(p);
+                }
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip("Whisper the invite link to this player");
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Cash"))

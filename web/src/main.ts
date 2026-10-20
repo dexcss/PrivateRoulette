@@ -41,6 +41,8 @@ let board: Board | null = null;
 let selectedChip = 10000;
 let rejoinBets: Record<string, number> | null = null;
 let prevBalance = 0;
+let pendingRound: any = null;
+let lastPlayers: PublicPlayer[] = [];
 let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
 let dealerGames: any[] = [];
 let lastLedger: any = null;
@@ -188,6 +190,7 @@ api.on("game_state", (d: GameStateMsg) => {
 });
 
 api.on("public_bets", (d: PublicBetsMsg) => {
+  lastPlayers = d.players;
   renderPlayers(d.players);
   if (board && me) {
     const myId = me.playerId;
@@ -219,10 +222,17 @@ api.on("spin", (d) => {
 });
 
 api.on("round_result", (d) => {
-  // balance delta flash + sound
+  pendingRound = d;
+  if (!wheel?.isSpinning) revealRound();
+});
+
+function revealRound(): void {
+  if (!pendingRound) return;
+  const round = pendingRound;
+  pendingRound = null;
   const myId = me?.playerId;
   if (myId) {
-    const newBal = d.balances?.[myId];
+    const newBal = round.balances?.[myId];
     if (newBal !== undefined) {
       const delta = newBal - prevBalance;
       if (delta !== 0) {
@@ -232,7 +242,8 @@ api.on("round_result", (d) => {
       prevBalance = newBal;
     }
   }
-});
+  renderBalance(lastPlayers, true);
+}
 
 api.on("bets_updated", (d) => {
   if (board) board.renderBets(d.bets ?? {});
@@ -329,11 +340,20 @@ function renderState() {
   $("#chips").hidden = role !== "player";
 }
 
-function renderBalance(players: PublicPlayer[]) {
+function renderBalance(players: PublicPlayer[], force = false) {
   if (!me) return;
+  if (!force && wheel?.isSpinning && pendingRound) return; // hold the reveal until the wheel settles
   const mine = players.find((p) => p.id === me!.playerId);
   if (mine) {
-    balanceLabel.textContent = `${mine.balance.toLocaleString()} gil`;
+    const staked = Object.values(mine.bets ?? {}).reduce((a, b) => a + b, 0);
+    const left = mine.balance - staked;
+    balanceLabel.textContent = `${mine.balance.toLocaleString()} gil · ${left.toLocaleString()} left`;
+    const limitsEl = document.getElementById("limits");
+    if (limitsEl && state) {
+      limitsEl.textContent =
+        `max inside ${state.max_bet_inner.toLocaleString()} · outside ${state.max_bet_outer.toLocaleString()}` +
+        ` · VIP ${state.max_bet_inner_vip.toLocaleString()}/${state.max_bet_outer_vip.toLocaleString()} · staked ${staked.toLocaleString()}`;
+    }
     prevBalance = mine.balance;
     lastNet.textContent = mine.last_round_net === 0 ? "" : mine.last_round_net > 0 ? `▲ ${mine.last_round_net.toLocaleString()}` : `▼ ${Math.abs(mine.last_round_net).toLocaleString()}`;
     lastNet.className = mine.last_round_net >= 0 ? "net pos" : "net neg";
@@ -627,7 +647,7 @@ playersList.addEventListener("click", (e) => {
 
 wheel = new Wheel(wheelCanvas);
 wheel.setTickCallback(() => sfx.tick());
-wheel.setSettleCallback(() => sfx.land());
+wheel.setSettleCallback(() => { sfx.land(); revealRound(); });
 board = new Board(boardEl, {
   place: (target) => { sfx.chip(); api.send("place_bet", { target, amount: selectedChip }); },
   remove: (target) => api.send("remove_bet", { target }),

@@ -27,24 +27,24 @@ public sealed partial class DiceService : IDisposable
 
     // Recovered from the original plugin's constant pool (see dumps/decoded_strings.txt).
     // EN: "Random! (1-1000) 530"  |  "Random! 530"
-    [GeneratedRegex(@"^Random! \(1-(\d{1,3})\) (\d{1,3})$")]
+    [GeneratedRegex(@"^Random!\s*\(1-(\d{1,4})\)\s+(\d{1,4})$")]
     private static partial Regex EnRollFull();
 
-    [GeneratedRegex(@"^Random! (\d{1,3})")]
+    [GeneratedRegex(@"^Random!\s+(\d{1,4})")]
     private static partial Regex EnRollShort();
 
     // DE: "Würfeln! (1-1000) 530"
-    [GeneratedRegex(@"^Würfeln! \(1-(\d{1,3})\) (\d{1,3})$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^Würfeln!\s*\(1-(\d{1,4})\)\s+(\d{1,4})$", RegexOptions.CultureInvariant)]
     private static partial Regex DeRollFull();
 
-    [GeneratedRegex(@"^Würfeln!\s+(\d{1,3})$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^Würfeln!\s+(\d{1,4})$", RegexOptions.CultureInvariant)]
     private static partial Regex DeRollShort();
 
     // FR: "Lancer d'un dé (1000) ! 530" | "Lancer de dé ! 530"
-    [GeneratedRegex(@"^Lancer d'un dé (\d+) ! (\d+)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^Lancer d'un dé\s*\((\d{1,4})\)\s*!\s*(\d{1,4})$", RegexOptions.CultureInvariant)]
     private static partial Regex FrRollFull();
 
-    [GeneratedRegex(@"^Lancer de dé ! (\d+)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^Lancer de dé\s*!\s*(\d{1,4})$", RegexOptions.CultureInvariant)]
     private static partial Regex FrRollShort();
 
     // JP (best effort — the original stored these mojibake-encoded): "サイコロ MAX(1000) 530"-shaped
@@ -58,22 +58,25 @@ public sealed partial class DiceService : IDisposable
         {
             var m = rx.Match(message);
             if (m.Success && long.TryParse(m.Groups[2].Value, out var v))
-                return v;
+                return MapRoll(v);
         }
 
         foreach (var rx in new[] { EnRollShort(), DeRollShort(), FrRollShort() })
         {
             var m = rx.Match(message);
             if (m.Success && long.TryParse(m.Groups[1].Value, out var v))
-                return v;
+                return MapRoll(v);
         }
 
         var jp = JpRoll().Match(message);
         if (jp.Success && long.TryParse(jp.Groups[2].Value, out var jv))
-            return jv;
+            return MapRoll(jv);
 
         return null;
     }
+
+    /// <summary>/random 1000 → 1..1000; map 1000 to 0 so the domain is exactly 0..999.</summary>
+    private static long MapRoll(long value) => value == 1000 ? 0 : value;
 
     /// <summary>Rendered announcements waiting to be sent to the table chat.</summary>
     private readonly ConcurrentQueue<string> outgoingAnnouncements = new();
@@ -93,7 +96,7 @@ public sealed partial class DiceService : IDisposable
             this.RefreshCharacter();
 
         // watch chat for dice rolls
-        chat.CheckMessageHandled += this.OnChatMessage;
+        chat.ChatMessage += this.OnChatMessage;
     }
 
     private void OnLogin()
@@ -138,7 +141,11 @@ public sealed partial class DiceService : IDisposable
         var text = message.Message.TextValue;
         var roll = ParseDiceRoll(text);
         if (roll == null)
+        {
+            if (text.Contains("Random", StringComparison.OrdinalIgnoreCase))
+                this.log.Debug($"[dice] unparsed roll line: {text}");
             return;
+        }
 
         this.log.Info($"dice roll detected: {roll} ({text})");
         if (this.session.AwaitingDice && this.session.PendingSpin != null)
@@ -169,7 +176,7 @@ public sealed partial class DiceService : IDisposable
 
     public void Dispose()
     {
-        this.chat.CheckMessageHandled -= this.OnChatMessage;
+        this.chat.ChatMessage -= this.OnChatMessage;
         this.clientState.Login -= this.OnLogin;
         this.clientState.Logout -= this.OnLogout;
     }
