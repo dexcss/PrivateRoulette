@@ -57,6 +57,15 @@ const DEMO_PLAYERS: PublicPlayer[] = [
   { id: "demo3", name: "Cid@Adamantoise", display_name: "Cid", color: "#2ECC71", chip_style: "classic", bets: { "n-0": 25000, black: 100000, topline: 50000 }, ready: false, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: 500000 },
 ];
 let demoMode = false;
+
+const DEMO_BANKROLL = 1_000_000;
+const DEMO_WINDOW_MS = 20000;
+const DEMO_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+let demoBalance = DEMO_BANKROLL;
+let demoPhase: "betting" | "spinning" = "betting";
+let demoSpinAt = 0;
+let demoLastBets: Record<string, number> = {};
+let demoTicker = 0;
 let dealerToken = localStorage.getItem("pr_dealer_token") ?? "";
 let dealerGames: any[] = [];
 let lastLedger: any = null;
@@ -292,6 +301,7 @@ function revealRound(): void {
   renderBalance(lastPlayers, true);
   renderPlayers(lastPlayers);
   for (const m of deferredChat.splice(0)) addChatLine(m);
+  if (demoMode) demoNextRound();
 }
 
 api.on("bets_updated", (d: { bets: Record<string, number> }) => {
@@ -441,7 +451,11 @@ function mergedMyBets(): Record<string, number> {
 function withMyBets(players: PublicPlayer[]): PublicPlayer[] {
   if (!me) return players;
   const merged = mergedMyBets();
-  return players.map((p) => (p.id === me!.playerId ? { ...p, bets: merged } : p));
+  return players.map((p) => {
+    if (p.id !== me!.playerId) return p;
+    // demo keeps the viewer's balance locally (no backend to store it)
+    return { ...p, bets: merged, balance: demoMode ? demoBalance : p.balance };
+  });
 }
 
 /** Drop optimistic operations the server has already reflected. */
@@ -593,19 +607,57 @@ if (muteBtn) {
 readyBtn.addEventListener("click", () => {
   if (!state || !me) return;
   sfx.ready();
+  if (demoMode) {
+    demoStartSpin();
+    return;
+  }
   const myId = me.playerId;
   const mine = state.players.find((p) => p.id === myId);
   api.send("set_ready", { ready: !mine?.ready });
 });
 
 cashoutBtn.addEventListener("click", () => {
+  if (demoMode) {
+    demoBalance = DEMO_BANKROLL;
+    serverMyBets = {};
+    const you = lastPlayers.find((p) => p.id === "demoYou");
+    if (you) you.balance = DEMO_BANKROLL;
+    queueRender();
+    statusLabel.textContent = "demo — fresh 1,000,000 bankroll";
+    return;
+  }
   if (confirm("Cash out your full balance? The dealer will trade your winnings.")) {
     api.send("cashout");
   }
 });
 
-rebetBtn.addEventListener("click", () => api.send("rebet_mine"));
-clearBtn.addEventListener("click", () => api.send("clear_my_bets"));
+rebetBtn.addEventListener("click", () => {
+  if (demoMode) {
+    if (demoPhase !== "betting") {
+      flashResult("wait for the next round", false);
+      return;
+    }
+    const total = Object.values(demoLastBets).reduce((a, b) => a + b, 0);
+    if (total > demoBalance) {
+      sfx.error();
+      flashResult("not enough balance to rebet", false);
+      return;
+    }
+    serverMyBets = { ...demoLastBets };
+    queueRender();
+    return;
+  }
+  api.send("rebet_mine");
+});
+
+clearBtn.addEventListener("click", () => {
+  if (demoMode) {
+    serverMyBets = {};
+    queueRender();
+    return;
+  }
+  api.send("clear_my_bets");
+});
 
 // ---------- dealer console ----------
 
@@ -791,6 +843,10 @@ board = new Board(boardEl, {
   place: (target) => {
     if (role !== "player" || !me) return;
     sfx.chip();
+    if (demoMode) {
+      demoPlace(target, selectedChip);
+      return;
+    }
     const base = mergedMyBets()[target] ?? 0;
     pendingBets.push({ kind: "place", target, amount: selectedChip, expected: base + selectedChip });
     queueRender();
@@ -798,6 +854,10 @@ board = new Board(boardEl, {
   },
   remove: (target) => {
     if (role !== "player" || !me) return;
+    if (demoMode) {
+      demoRemove(target);
+      return;
+    }
     pendingBets.push({ kind: "remove", target });
     queueRender();
     api.send("remove_bet", { target });
@@ -839,50 +899,250 @@ if (auto) {
   }
 }
 
-// ---------- demo mode (view the table + wheel with no backend / no game) ----------
+// ---------- demo mode: a fully playable, self-contained game (no backend) ----------
+
+function demoColor(n: number): string {
+  if (n === 0 || n === 37) return "green";
+  return DEMO_RED.has(n) ? "red" : "black";
+}
+
+function demoInside(target: string): boolean {
+  return (
+    target.startsWith("n-") || target.startsWith("split-") || target.startsWith("street-") ||
+    target.startsWith("corner-") || target.startsWith("sixline-") ||
+    target === "topline" || target === "firstfour"
+  );
+}
+
+/** Same payout table as the real backend (fairness.ts). */
+function demoPayoutMult(target: string, result: number): number {
+  const t = target.toLowerCase();
+  if (t.startsWith("n-")) return parseInt(t.slice(2), 10) === result ? 36 : 0;
+  switch (t) {
+    case "red": return result !== 0 && result !== 37 && demoColor(result) === "red" ? 2 : 0;
+    case "black": return result !== 0 && result !== 37 && demoColor(result) === "black" ? 2 : 0;
+    case "odd": return result !== 0 && result !== 37 && result % 2 === 1 ? 2 : 0;
+    case "even": return result !== 0 && result !== 37 && result % 2 === 0 ? 2 : 0;
+    case "low": return result !== 0 && result !== 37 && result <= 18 ? 2 : 0;
+    case "high": return result !== 0 && result !== 37 && result >= 19 ? 2 : 0;
+    case "firstfour": return result >= 0 && result <= 3 ? 9 : 0;
+    case "topline": return result === 0 || result === 37 || (result >= 1 && result <= 3) ? 7 : 0;
+  }
+  const list = (prefix: string, count: number): number[] | null => {
+    if (!t.startsWith(prefix)) return null;
+    const parts = t.slice(prefix.length).split("-");
+    if (parts.length !== count) return null;
+    const nums = parts.map((p) => parseInt(p, 10));
+    if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 37)) return null;
+    return nums;
+  };
+  const split = list("split-", 2);
+  if (split) return split.includes(result) ? 18 : 0;
+  const street = list("street-", 3);
+  if (street) return street.includes(result) ? 12 : 0;
+  const corner = list("corner-", 4);
+  if (corner) return corner.includes(result) ? 9 : 0;
+  const six = list("sixline-", 6);
+  if (six) return six.includes(result) ? 6 : 0;
+  if (t.startsWith("dozen-")) {
+    const d = parseInt(t.slice(6), 10);
+    const dz = result === 0 || result === 37 ? null : Math.floor((result - 1) / 12) + 1;
+    return d >= 1 && d <= 3 && dz === d ? 3 : 0;
+  }
+  if (t.startsWith("col-")) {
+    const c = parseInt(t.slice(4), 10);
+    const col = result === 0 || result === 37 ? null : result % 3 === 0 ? 3 : result % 3;
+    return c >= 1 && c <= 3 && col === c ? 3 : 0;
+  }
+  return 0;
+}
+
+function demoDescribe(target: string): string {
+  const num = (n: number) => (n === 37 ? "00" : String(n));
+  const nums = (s: string) => s.split("-").map((x) => num(parseInt(x, 10)));
+  const t = target.toLowerCase();
+  if (t.startsWith("n-")) return `straight ${num(parseInt(t.slice(2), 10))}`;
+  if (t.startsWith("split-")) return `split ${nums(t.slice(6)).join("/")}`;
+  if (t.startsWith("street-")) return `street ${nums(t.slice(7)).join("-")}`;
+  if (t.startsWith("corner-")) return `corner ${nums(t.slice(7)).join("/")}`;
+  if (t.startsWith("sixline-")) {
+    const n = nums(t.slice(8));
+    return `six-line ${n[0]}-${n[2]}/${n[3]}-${n[5]}`;
+  }
+  if (t.startsWith("dozen-")) return `dozen ${t.slice(6)}`;
+  if (t.startsWith("col-")) return `column ${t.slice(4)}`;
+  const names: Record<string, string> = {
+    topline: "top line 0-00-1-2-3", firstfour: "first four", low: "1-18", high: "19-36",
+    red: "red", black: "black", odd: "odd", even: "even",
+  };
+  return names[t] ?? t;
+}
+
+function demoPlace(target: string, amount: number): void {
+  if (demoPhase !== "betting") {
+    flashResult("no more bets", false);
+    return;
+  }
+  const staked = Object.values(serverMyBets).reduce((a, b) => a + b, 0);
+  const limit = demoInside(target) ? 500000 : 250000;
+  const already = serverMyBets[target] ?? 0;
+  if (already + amount > limit) {
+    sfx.error();
+    flashResult(`max bet for this spot is ${limit.toLocaleString()}`, false);
+    return;
+  }
+  if (staked + amount > 500000) {
+    sfx.error();
+    flashResult("max total bet is 500,000", false);
+    return;
+  }
+  if (staked + amount > demoBalance) {
+    sfx.error();
+    flashResult("not enough balance", false);
+    return;
+  }
+  serverMyBets[target] = (serverMyBets[target] ?? 0) + amount;
+  queueRender();
+}
+
+function demoRemove(target: string): void {
+  if (demoPhase !== "betting") return;
+  if (target in serverMyBets) delete serverMyBets[target];
+  queueRender();
+}
+
+function demoNpcBets(): void {
+  const targets = [
+    "n-0", "n-17", "n-32", "n-37", "split-3-6", "split-18-21",
+    "corner-3-6-2-5", "corner-15-18-14-17", "street-4-5-6", "street-25-26-27",
+    "sixline-1-2-3-4-5-6", "red", "black", "odd", "low", "dozen-2", "col-1", "col-3", "topline",
+  ];
+  const chips = [10000, 50000, 100000, 250000];
+  for (const p of lastPlayers) {
+    if (p.id === "demoYou") continue;
+    if (p.balance < 10000) p.balance = 1_000_000;
+    p.bets = {};
+    const count = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < count; i++) {
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const amount = chips[Math.floor(Math.random() * chips.length)];
+      p.bets[target] = (p.bets[target] ?? 0) + amount;
+    }
+  }
+}
+
+function demoStartSpin(): void {
+  if (demoPhase !== "betting" || !wheel || wheel.isSpinning) return;
+  demoPhase = "spinning";
+  const result = Math.floor(Math.random() * 38);
+  const color = demoColor(result);
+  const results: any[] = [];
+  const balances: Record<string, number> = {};
+
+  const settleOne = (p: PublicPlayer, bets: Record<string, number>): void => {
+    let net = 0;
+    for (const [target, amount] of Object.entries(bets)) {
+      const mult = demoPayoutMult(target, result);
+      const payout = amount * mult;
+      p.balance -= amount;
+      net += payout - amount;
+      if (mult > 0) {
+        p.balance += payout;
+        results.push({
+          player_id: p.id, player_name: p.display_name, bet_type: target,
+          bet_label: demoDescribe(target), bet_amount: amount, payout, net: payout - amount,
+        });
+      }
+    }
+    p.last_round_net = net;
+    p.bets = {};
+    balances[p.id] = p.balance;
+  };
+
+  demoLastBets = { ...serverMyBets };
+  // settle the viewer from their local bets, then the NPCs
+  const you = lastPlayers.find((p) => p.id === "demoYou");
+  if (you) settleOne(you, serverMyBets);
+  serverMyBets = {};
+  for (const p of lastPlayers) {
+    if (p.id === "demoYou") continue;
+    settleOne(p, p.bets ?? {});
+  }
+  if (you) demoBalance = you.balance;
+
+  state = { ...state!, spinning: true, table_locked: true };
+  pendingRound = { result, color, balances, results, dice_roll: null };
+
+  const winners = results.map((r) => `${r.player_name} +${r.net.toLocaleString()} on ${r.bet_label}`);
+  deferredChat.push({
+    role: "system",
+    from_name: "System",
+    color: "#c9a227",
+    text: `Number ${result === 37 ? "00" : result} (${color})! ${winners.length ? winners.join("; ") : "No winning bets — house takes the round."}`,
+  });
+
+  renderState();
+  queueRender();
+  wheel.spinTo(result, 28000);
+}
+
+function demoNextRound(): void {
+  if (!demoMode) return;
+  demoPhase = "betting";
+  state = { ...state!, spinning: false, table_locked: false };
+  demoNpcBets();
+  demoSpinAt = performance.now() + DEMO_WINDOW_MS;
+  renderState();
+  queueRender();
+  readyBtn.textContent = "Spin now";
+}
 
 function startDemo(): void {
   demoMode = true;
-  role = "spectator";
+  role = "player";
+  me = { playerId: "demoYou", displayName: "You" };
   gameId = "";
   playerKey = "";
+  demoBalance = DEMO_BANKROLL;
+  serverMyBets = {};
+  pendingBets = [];
+  demoLastBets = {};
+  const you: PublicPlayer = {
+    id: "demoYou", name: "You", display_name: "You", color: "#F39C12", chip_style: "classic",
+    bets: {}, ready: false, away: false, is_vip: false, is_freeplay: false, last_round_net: 0, balance: DEMO_BANKROLL,
+  };
+  lastPlayers = [you, ...DEMO_PLAYERS.map((p) => ({ ...p }))];
+  state = {
+    spinning: false, table_locked: false, awaiting_dice: false,
+    spin_mode: "control", control_number: "demo", creator_name: "Demo", creator_homeworld: "Adamantoise",
+    game_status: "active", max_bet_inner: 500000, max_bet_outer: 250000, max_bet_inner_vip: 1000000, max_bet_outer_vip: 500000,
+    max_bet_total: 500000, max_bet_total_vip: 1000000,
+    chip_denominations: [10000, 50000, 100000, 250000, 500000],
+    players: lastPlayers,
+  };
   viewLanding.hidden = true;
   viewLocked.hidden = true;
   viewTable.hidden = false;
   wheel?.refreshSize();
-  state = {
-    spinning: false,
-    table_locked: false,
-    awaiting_dice: false,
-    spin_mode: "control",
-    control_number: "demo",
-    creator_name: "Demo",
-    creator_homeworld: "Adamantoise",
-    game_status: "active",
-    max_bet_inner: 500000,
-    max_bet_outer: 250000,
-    max_bet_inner_vip: 1000000,
-    max_bet_outer_vip: 500000,
-    max_bet_total: 500000,
-    max_bet_total_vip: 1000000,
-    chip_denominations: [10000, 50000, 100000, 250000, 500000],
-    players: DEMO_PLAYERS,
-  };
-  lastPlayers = DEMO_PLAYERS;
-  serverMyBets = {};
-  pendingBets = [];
+  demoPhase = "betting";
+  demoNpcBets();
+  demoSpinAt = performance.now() + DEMO_WINDOW_MS;
   renderState();
   queueRender();
-  statusLabel.textContent = "demo — watching the wheel";
-  demoSpin();
-}
+  readyBtn.textContent = "Spin now";
+  statusLabel.textContent = `place your bets — spin in ${DEMO_WINDOW_MS / 1000}s`;
 
-function demoSpin(): void {
-  if (!demoMode) return;
-  wheel?.spinTo(Math.floor(Math.random() * 38), 28000);
-  window.setTimeout(() => {
-    if (demoMode) demoSpin();
-  }, 28000 + 2800);
+  window.clearInterval(demoTicker);
+  demoTicker = window.setInterval(() => {
+    if (!demoMode) return;
+    if (demoPhase === "betting") {
+      const left = Math.max(0, Math.ceil((demoSpinAt - performance.now()) / 1000));
+      statusLabel.textContent = `place your bets — spin in ${left}s`;
+      if (left <= 0) demoStartSpin();
+    } else {
+      statusLabel.textContent = "wheel spinning — no more bets";
+    }
+  }, 500);
 }
 
 function flashResult(text: string, positive: boolean): void {
