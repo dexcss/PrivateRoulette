@@ -190,10 +190,12 @@ export class Board {
           this.zoneChips.set(target, list);
 
           z.addEventListener("click", (e) => {
+            e.stopPropagation();
             if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
           });
           z.addEventListener("contextmenu", (e) => {
             e.preventDefault();
+            e.stopPropagation();
             this.cb.remove(target);
           });
           cell.appendChild(z);

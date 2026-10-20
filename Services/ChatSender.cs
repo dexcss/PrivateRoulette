@@ -9,8 +9,9 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 namespace PrivateRoulette.Services;
 
 /// <summary>
-/// Sends chat lines through the game's chat entry (UIModule::ProcessChatBoxEntry)
-/// via FFXIVClientStructs — no signature scanning, no wrong-address crashes.
+/// Sends chat lines through the game's chat entry (UIModule::ProcessChatBoxEntry),
+/// replicating ECommons' Chat.SendMessage exactly: null-terminated UTF-8 built
+/// into a Utf8String via Ctor_FromSequence, sent, then freed.
 /// </summary>
 public sealed unsafe class ChatSender
 {
@@ -23,7 +24,7 @@ public sealed unsafe class ChatSender
 
     public bool Send(string message)
     {
-        var utf8 = (Utf8String*)0;
+        Utf8String* utf8 = null;
         try
         {
             var ui = UIModule.Instance();
@@ -33,13 +34,15 @@ public sealed unsafe class ChatSender
                 return false;
             }
 
+            // ECommons-exact: UTF-8 bytes with a trailing null terminator
             var bytes = Encoding.UTF8.GetBytes(message);
-            utf8 = (Utf8String*)System.Runtime.InteropServices.NativeMemory.AllocZeroed((nuint)sizeof(Utf8String));
-            utf8->Ctor();
+            var buf = new byte[bytes.Length + 1];
+            bytes.CopyTo(buf, 0);
 
-            fixed (byte* p = bytes)
+            utf8 = (Utf8String*)System.Runtime.InteropServices.NativeMemory.AllocZeroed((nuint)sizeof(Utf8String));
+            fixed (byte* p = buf)
             {
-                utf8->SetString(new ReadOnlySpan<byte>(p, bytes.Length));
+                utf8->Ctor_FromSequence(p, (nuint)buf.Length);
             }
 
             ui->ProcessChatBoxEntry(utf8, 0, false);
