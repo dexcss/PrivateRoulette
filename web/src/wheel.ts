@@ -215,31 +215,31 @@ export class Wheel {
       this.lastTickPocket = pocket;
       this.lastTickTime = nowMs;
       this.onTick?.();
-      // visible fret hop once the ball has slowed enough for them to read
-      if (this.ballSpeedAt() < 0.5) this.hopStart = nowMs;
+      // gentle fret bump once the ball has really slowed (no pops while fast)
+      if (this.ballSpeedAt() < 0.22) this.hopStart = nowMs;
     }
   }
 
-  /** The ball rattles across the frets with a decaying oscillation that ends
-   *  at zero, so the landing stays exact. */
+  /** A gentle, fully-enveloped back-and-forth as the ball loses its last bit of
+   *  speed. Small amplitude, low frequency, and it decays to zero so the
+   *  landing stays exact. */
   private settleWobble(t: number): number {
-    if (t < 0.82) return 0;
-    const u = (t - 0.82) / 0.18;
+    if (t < 0.85) return 0;
+    const u = (t - 0.85) / 0.15;
     const envelope = Math.sin(Math.PI * Math.min(1, u)); // rises then falls to 0
-    return SLOT * 0.24 * envelope * Math.sin(u * Math.PI * 7);
+    return SLOT * 0.10 * envelope * Math.sin(u * Math.PI * 4.5);
   }
 
-  /** Ball height through the spin: races on the outer track, moves down onto
-   *  the numbers and rattles there for a long while, then drops into the
-   *  winning pocket with a soft hop. */
+  /** Ball height through the spin: races on the outer rim, glides onto the
+   *  number track for a long crawl, then drifts down into the winning pocket.
+   *  Every transition is smoothstepped - no popping. */
   private ballRadiusAt(t: number): number {
     const track = 0.862; // riding over the number ring
-    if (t < 0.42) return this.RIM_RADIUS;
-    if (t < 0.5) return this.RIM_RADIUS + (track - this.RIM_RADIUS) * this.smoothstep((t - 0.42) / 0.08);
-    if (t < 0.9) return track;
-    if (t < 0.96) return track + (this.REST_RADIUS - track) * this.smoothstep((t - 0.9) / 0.06);
-    const u = (t - 0.96) / 0.04;
-    return this.REST_RADIUS + 0.025 * Math.sin(Math.min(1, u) * Math.PI) * (1 - u);
+    if (t < 0.4) return this.RIM_RADIUS;
+    if (t < 0.52) return this.RIM_RADIUS + (track - this.RIM_RADIUS) * this.smoothstep((t - 0.4) / 0.12);
+    if (t < 0.88) return track;
+    if (t < 0.98) return track + (this.REST_RADIUS - track) * this.smoothstep((t - 0.88) / 0.1);
+    return this.REST_RADIUS;
   }
 
   private faceCache: HTMLCanvasElement | null = null;
@@ -297,18 +297,18 @@ export class Wheel {
       ballR = R * this.REST_RADIUS;
       ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT - Math.PI / 2 : Math.PI);
     }
-    // fret hop: the ball lifts and kicks outward briefly each time it crosses
-    // a fret, like it's bouncing over the diamond
+    // fret bump: a tiny, slow bounce as the ball crosses a fret - just enough
+    // to read as a rattle, never a jump
     let hop = 0;
     if (this.spin) {
       const age = performance.now() - this.hopStart;
-      if (age >= 0 && age < 170) hop = Math.sin((Math.PI * age) / 170);
+      if (age >= 0 && age < 240) hop = Math.sin((Math.PI * age) / 240);
     }
-    const hopLift = 0.05 * hop;
+    const hopLift = 0.008 * hop;
     const bx = c + Math.cos(ballA) * ballR * (1 + hopLift);
     const by = c + Math.sin(ballA) * ballR * (1 + hopLift);
     const br = Math.max(5, R * 0.033);
-    const ballDrawR = br * (1 + 0.15 * hop);
+    const ballDrawR = br * (1 + 0.07 * hop);
 
     // motion streak while the ball is still travelling fast
     if (this.spin) {
@@ -327,11 +327,11 @@ export class Wheel {
       this.trail = [];
     }
 
-    // ball shadow (separates and shrinks while the ball is airborne)
-    const shadowScale = 1 - 0.32 * hop;
+    // ball shadow (barely separates while the ball bounces)
+    const shadowScale = 1 - 0.15 * hop;
     ctx.beginPath();
-    ctx.ellipse(bx + br * (0.28 + 0.3 * hop), by + br * (0.4 + 0.24 * hop), br * 0.92 * shadowScale, br * 0.62 * shadowScale, 0, 0, TAU);
-    ctx.fillStyle = `rgba(0,0,0,${(0.5 - 0.15 * hop).toFixed(3)})`;
+    ctx.ellipse(bx + br * (0.28 + 0.12 * hop), by + br * (0.4 + 0.1 * hop), br * 0.92 * shadowScale, br * 0.62 * shadowScale, 0, 0, TAU);
+    ctx.fillStyle = `rgba(0,0,0,${(0.5 - 0.08 * hop).toFixed(3)})`;
     ctx.fill();
 
     // ball body (ivory)
