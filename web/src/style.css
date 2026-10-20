@@ -163,6 +163,22 @@ canvas { display: block; }
   pointer-events: none;
 }
 
+/* In-between bet hit zones (splits, streets, corners, six lines).
+   They sit on the lines between cells and glow on hover so the target
+   is obvious. z-index keeps corners above the edges they overlap. */
+.cellzone {
+  z-index: 4;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: background .08s ease, box-shadow .08s ease;
+}
+.cellzone:hover {
+  background: rgba(243, 212, 124, .55);
+  box-shadow: 0 0 10px rgba(243, 212, 124, .85);
+}
+.cellzone .zone-chip { z-index: 5; }
+
 #betting-blocker {
   position: absolute; inset: 0; border-radius: 10px;
   background: rgba(8,10,14,.72); backdrop-filter: blur(2px);

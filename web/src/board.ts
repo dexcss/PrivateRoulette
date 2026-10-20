@@ -204,7 +204,7 @@ export class Board {
         // right edge → split with n+3 (same row)
         if (col < 12) {
           zone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
-            right: "-5px", top: "3px", bottom: "3px", width: "10px",
+            right: "-7px", top: "4px", bottom: "4px", width: "14px",
           });
         }
 
@@ -212,22 +212,22 @@ export class Board {
         if (row < 3) {
           if (row === 1) {
             zone(`street-${n}-${n - 1}-${n - 2}`, `Street ${n}/${n - 1}/${n - 2}`, {
-              bottom: "-5px", left: "4px", right: col < 12 ? "4px" : "-5px", height: "10px",
+              bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
             });
           } else {
             zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
-              bottom: "-5px", left: "4px", right: col < 12 ? "4px" : "-5px", height: "10px",
+              bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
             });
           }
           if (col < 12) {
             zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
-              bottom: "-5px", right: "-5px", width: "10px", height: "10px",
+              bottom: "-7px", right: "-7px", width: "14px", height: "14px",
             });
           }
         } else if (col < 12) {
           // bottom row: six line spanning this column and the next
           zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 12}-${n + 13}-${n + 14}`, `Six line ${n}-${n + 2}/${n + 12}-${n + 14}`, {
-            bottom: "-5px", left: "4px", right: "4px", height: "10px",
+            bottom: "-7px", left: "5px", right: "5px", height: "14px",
           });
         }
       }

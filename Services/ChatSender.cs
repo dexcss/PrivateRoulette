@@ -9,12 +9,16 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 namespace PrivateRoulette.Services;
 
 /// <summary>
-/// Sends chat lines through the game's chat entry (UIModule::ProcessChatBoxEntry),
-/// replicating ECommons' Chat.SendMessage exactly: null-terminated UTF-8 built
-/// into a Utf8String via Ctor_FromSequence, sent, then freed.
+/// Sends a line through the game's own chat box (UIModule::ProcessChatBoxEntry),
+/// exactly like ECommons' Chat.SendMessage did for SimpleRoulette: build a
+/// null-terminated Utf8String, hand it to the chat entry, then free it.
+/// The game itself validates the channel and target, so /tell, /p and any
+/// other slash command behave as if typed by the dealer.
 /// </summary>
 public sealed unsafe class ChatSender
 {
+    private const int MaxBytes = 500;
+
     private readonly IPluginLog log;
 
     public ChatSender(IPluginLog log)
@@ -24,28 +28,36 @@ public sealed unsafe class ChatSender
 
     public bool Send(string message)
     {
-        Utf8String* utf8 = null;
+        if (string.IsNullOrWhiteSpace(message)) return false;
+
+        Utf8String* mes = null;
         try
         {
             var ui = UIModule.Instance();
             if (ui == null)
             {
-                this.log.Warning("chat send failed: UIModule not available");
+                this.log.Warning("chat send failed: UIModule unavailable");
                 return false;
             }
 
-            // ECommons-exact: UTF-8 bytes with a trailing null terminator
-            var bytes = Encoding.UTF8.GetBytes(message);
-            var buf = new byte[bytes.Length + 1];
-            bytes.CopyTo(buf, 0);
-
-            utf8 = (Utf8String*)System.Runtime.InteropServices.NativeMemory.AllocZeroed((nuint)sizeof(Utf8String));
-            fixed (byte* p = buf)
+            // Chat is single-line; newlines would be dropped by the client anyway.
+            var clean = message.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            var bytes = Encoding.UTF8.GetByteCount(clean);
+            if (bytes > MaxBytes)
             {
-                utf8->Ctor_FromSequence(p, (nuint)buf.Length);
+                this.log.Warning($"chat send failed: {bytes} bytes exceeds the {MaxBytes}-byte chat limit");
+                return false;
             }
 
-            ui->ProcessChatBoxEntry(utf8, 0, false);
+            mes = Utf8String.FromString(clean);
+            if (mes == null)
+            {
+                this.log.Warning("chat send failed: Utf8String allocation returned null");
+                return false;
+            }
+
+            ui->ProcessChatBoxEntry(mes);
+            this.log.Debug($"[chat] sent {clean.Length} chars");
             return true;
         }
         catch (Exception e)
@@ -55,10 +67,9 @@ public sealed unsafe class ChatSender
         }
         finally
         {
-            if (utf8 != null)
+            if (mes != null)
             {
-                try { utf8->Dtor(true); } catch { }
-                System.Runtime.InteropServices.NativeMemory.Free(utf8);
+                try { mes->Dtor(true); } catch { }
             }
         }
     }

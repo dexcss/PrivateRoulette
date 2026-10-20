@@ -34,6 +34,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly DiceService dice;
     private readonly TradeService trade;
     private readonly PluginUi ui;
+    private readonly ChatSender chatSender;
 
     /// <summary>Work items marshalled from socket threads onto the framework thread.</summary>
     private readonly ConcurrentQueue<Action> mainThreadQueue = new();
@@ -52,11 +53,15 @@ public sealed class Plugin : IDalamudPlugin
         this.session = new RouletteSession(this.config, this.socket, log, chatGui);
         this.dice = new DiceService(this.config, this.session, chatGui, clientState, playerState, log);
         this.ui = new PluginUi(this.pluginInterface, this.config, this.socket, this.session, log);
+        this.chatSender = new ChatSender(log);
 
         this.session.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
         this.socket.RunOnMainThread = a => this.mainThreadQueue.Enqueue(a);
-        this.session.RunCommand = cmd => this.commandManager.ProcessCommand(cmd);
-this.session.SendChatText = msg => this.commandManager.ProcessCommand(msg);
+
+        // ICommandManager.ProcessCommand only dispatches plugin-registered commands;
+        // it silently ignores /tell and /p. Send through the game's chat box instead.
+        this.session.RunCommand = this.SendChatLine;
+        this.session.SendChatText = this.SendChatLine;
         this.session.IsInParty = () => partyList.Length > 0;
         this.session.GetTargetPlayerName = () =>
         {
@@ -109,6 +114,17 @@ this.session.SendChatText = msg => this.commandManager.ProcessCommand(msg);
         }
 
         this.ui.Draw();
+    }
+
+    /// <summary>
+    /// Sends a game chat line through the chat box (the same path the game uses
+    /// when the dealer presses Enter). ICommandManager.ProcessCommand is only a
+    /// fallback for plugin-registered commands - it ignores /tell and /p.
+    /// </summary>
+    private void SendChatLine(string message)
+    {
+        if (!this.chatSender.Send(message))
+            this.commandManager.ProcessCommand(message);
     }
 
     private void OnCommand(string command, string arguments)

@@ -371,7 +371,7 @@ public sealed class RouletteSession : IDisposable
 
     /// <summary>Player betting link for the given player.</summary>
     public string? PlayerLink(PlayerState player)
-        => player.PlayerKey == null ? null : $"dexcss.github.io/PrivateRoulette/#/{this.GameId}/{player.PlayerKey}";
+        => player.PlayerKey == null ? null : $"https://dexcss.github.io/PrivateRoulette/#/{this.GameId}/{player.PlayerKey}";
 
     public void Dispose()
     {
