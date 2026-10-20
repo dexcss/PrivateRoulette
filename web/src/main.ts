@@ -879,10 +879,10 @@ function startDemo(): void {
 
 function demoSpin(): void {
   if (!demoMode) return;
-  wheel?.spinTo(Math.floor(Math.random() * 38), 24400);
+  wheel?.spinTo(Math.floor(Math.random() * 38), 28000);
   window.setTimeout(() => {
     if (demoMode) demoSpin();
-  }, 24400 + 2800);
+  }, 28000 + 2800);
 }
 
 function flashResult(text: string, positive: boolean): void {

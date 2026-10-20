@@ -26,7 +26,7 @@ public sealed class WheelWindow : Window
     private readonly IPluginLog log;
 
     private DateTime spinStart = DateTime.MinValue;
-    private double durationMs = 24400;
+    private double durationMs = 28000;
     private double wheelFrom;
     private double wheelTo;
     private double relFrom;

@@ -97,8 +97,11 @@ header {
 main { flex: 1; display: grid; grid-template-columns: minmax(320px, 0.8fr) minmax(560px, 1.2fr); gap: 20px; padding: 20px; min-height: 0; overflow-y: auto; }
 
 .left { display: flex; flex-direction: column; align-items: center; gap: 16px; min-width: 0; }
-.wheel-wrap { width: 100%; display: flex; justify-content: center; }
-canvas { display: block; }
+.wheel-wrap {
+  width: 100%; display: flex; justify-content: center;
+  background: radial-gradient(circle at 50% 42%, rgba(201,162,39,0.10), rgba(0,0,0,0) 68%);
+}
+canvas { display: block; filter: drop-shadow(0 18px 42px rgba(0,0,0,.55)); }
 
 .history { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .hist {

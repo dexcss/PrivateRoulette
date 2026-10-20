@@ -54,6 +54,7 @@ export class Wheel {
   private readonly REST_RADIUS = 0.69;
   private readonly RIM_RADIUS = 0.925;
   private lastTickTime = 0;
+  private hopStart = 0;
   private lastResult = -1;
   private settleTime = 0;
   private trail: { x: number; y: number; a: number }[] = [];
@@ -108,7 +109,7 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 24400): void {
+  spinTo(result: number, durationMs = 28000): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // pocket-centre angle relative to the wheel
@@ -140,11 +141,13 @@ export class Wheel {
         return Math.pow(Math.max(0, u), 1.5);
       }),
       ballProgress: this.buildTable((t) => {
-        // launch, long friction decay, slow crawl over the frets, final fall
-        if (t < 0.06) return t / 0.06;
-        if (t < 0.55) return 1 - (0.68 * (t - 0.06)) / 0.49;
-        if (t < 0.86) return 0.32 - (0.27 * (t - 0.55)) / 0.31;
-        return 0.05 * (1 - (t - 0.86) / 0.14);
+        // launch, long friction decay, then a slow crawl around the numbers
+        // (frets tick and the ball hops), then the final fall into the pocket
+        if (t < 0.03) return t / 0.03;
+        if (t < 0.42) return 1 - (0.55 * (t - 0.03)) / 0.39;
+        if (t < 0.62) return 0.45 - (0.3 * (t - 0.42)) / 0.2;
+        if (t < 0.9) return 0.15 - (0.13 * (t - 0.62)) / 0.28;
+        return 0.02 * (1 - (t - 0.9) / 0.1);
       }),
     };
   }
@@ -212,28 +215,31 @@ export class Wheel {
       this.lastTickPocket = pocket;
       this.lastTickTime = nowMs;
       this.onTick?.();
+      // visible fret hop once the ball has slowed enough for them to read
+      if (this.ballSpeedAt() < 0.5) this.hopStart = nowMs;
     }
   }
 
   /** The ball rattles across the frets with a decaying oscillation that ends
    *  at zero, so the landing stays exact. */
   private settleWobble(t: number): number {
-    if (t < 0.78) return 0;
-    const u = (t - 0.78) / 0.22;
+    if (t < 0.82) return 0;
+    const u = (t - 0.82) / 0.18;
     const envelope = Math.sin(Math.PI * Math.min(1, u)); // rises then falls to 0
-    return SLOT * 0.30 * envelope * Math.sin(u * Math.PI * 6.5);
+    return SLOT * 0.24 * envelope * Math.sin(u * Math.PI * 7);
   }
 
-  /** Ball height: rides the rim, drops into the pocket with a soft hop. */
+  /** Ball height through the spin: races on the outer track, moves down onto
+   *  the numbers and rattles there for a long while, then drops into the
+   *  winning pocket with a soft hop. */
   private ballRadiusAt(t: number): number {
-    if (t < 0.8) return this.RIM_RADIUS;
-    if (t < 0.9) {
-      const u = (t - 0.8) / 0.1;
-      return this.RIM_RADIUS + (this.REST_RADIUS - this.RIM_RADIUS) * this.smoothstep(u);
-    }
-    const u = (t - 0.9) / 0.1;
-    // tiny settle hop that decays to exactly REST at t=1
-    return this.REST_RADIUS + 0.02 * Math.sin(Math.min(1, u) * Math.PI) * (1 - u);
+    const track = 0.862; // riding over the number ring
+    if (t < 0.42) return this.RIM_RADIUS;
+    if (t < 0.5) return this.RIM_RADIUS + (track - this.RIM_RADIUS) * this.smoothstep((t - 0.42) / 0.08);
+    if (t < 0.9) return track;
+    if (t < 0.96) return track + (this.REST_RADIUS - track) * this.smoothstep((t - 0.9) / 0.06);
+    const u = (t - 0.96) / 0.04;
+    return this.REST_RADIUS + 0.025 * Math.sin(Math.min(1, u) * Math.PI) * (1 - u);
   }
 
   private faceCache: HTMLCanvasElement | null = null;
@@ -291,9 +297,18 @@ export class Wheel {
       ballR = R * this.REST_RADIUS;
       ballA = this.wheelAngle + (this.lastResult >= 0 ? ORDER.indexOf(this.lastResult) * SLOT - Math.PI / 2 : Math.PI);
     }
-    const bx = c + Math.cos(ballA) * ballR;
-    const by = c + Math.sin(ballA) * ballR;
+    // fret hop: the ball lifts and kicks outward briefly each time it crosses
+    // a fret, like it's bouncing over the diamond
+    let hop = 0;
+    if (this.spin) {
+      const age = performance.now() - this.hopStart;
+      if (age >= 0 && age < 170) hop = Math.sin((Math.PI * age) / 170);
+    }
+    const hopLift = 0.05 * hop;
+    const bx = c + Math.cos(ballA) * ballR * (1 + hopLift);
+    const by = c + Math.sin(ballA) * ballR * (1 + hopLift);
     const br = Math.max(5, R * 0.033);
+    const ballDrawR = br * (1 + 0.15 * hop);
 
     // motion streak while the ball is still travelling fast
     if (this.spin) {
@@ -312,20 +327,21 @@ export class Wheel {
       this.trail = [];
     }
 
-    // ball shadow
+    // ball shadow (separates and shrinks while the ball is airborne)
+    const shadowScale = 1 - 0.32 * hop;
     ctx.beginPath();
-    ctx.ellipse(bx + br * 0.28, by + br * 0.4, br * 0.92, br * 0.62, 0, 0, TAU);
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.ellipse(bx + br * (0.28 + 0.3 * hop), by + br * (0.4 + 0.24 * hop), br * 0.92 * shadowScale, br * 0.62 * shadowScale, 0, 0, TAU);
+    ctx.fillStyle = `rgba(0,0,0,${(0.5 - 0.15 * hop).toFixed(3)})`;
     ctx.fill();
 
     // ball body (ivory)
-    const ballGrad = ctx.createRadialGradient(bx - br * 0.38, by - br * 0.42, br * 0.08, bx, by, br);
+    const ballGrad = ctx.createRadialGradient(bx - ballDrawR * 0.38, by - ballDrawR * 0.42, ballDrawR * 0.08, bx, by, ballDrawR);
     ballGrad.addColorStop(0, "#ffffff");
     ballGrad.addColorStop(0.4, "#f6f4ee");
     ballGrad.addColorStop(0.78, "#d7d9dd");
     ballGrad.addColorStop(1, "#8e949c");
     ctx.beginPath();
-    ctx.arc(bx, by, br, 0, TAU);
+    ctx.arc(bx, by, ballDrawR, 0, TAU);
     ctx.fillStyle = ballGrad;
     ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,0.5)";
@@ -334,7 +350,7 @@ export class Wheel {
 
     // specular
     ctx.beginPath();
-    ctx.arc(bx - br * 0.34, by - br * 0.4, br * 0.2, 0, TAU);
+    ctx.arc(bx - ballDrawR * 0.34, by - ballDrawR * 0.4, ballDrawR * 0.2, 0, TAU);
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fill();
 
@@ -382,10 +398,11 @@ export class Wheel {
   private ballSpeedAt(): number {
     if (!this.spin) return 0;
     const t = Math.min(1, (performance.now() - this.spin.startTime) / this.spin.duration);
-    if (t < 0.06) return t / 0.06;
-    if (t < 0.55) return 1 - (0.68 * (t - 0.06)) / 0.49;
-    if (t < 0.86) return 0.32 - (0.27 * (t - 0.55)) / 0.31;
-    return 0.05 * (1 - (t - 0.86) / 0.14);
+    if (t < 0.03) return t / 0.03;
+    if (t < 0.42) return 1 - (0.55 * (t - 0.03)) / 0.39;
+    if (t < 0.62) return 0.45 - (0.3 * (t - 0.42)) / 0.2;
+    if (t < 0.9) return 0.15 - (0.13 * (t - 0.62)) / 0.28;
+    return 0.02 * (1 - (t - 0.9) / 0.1);
   }
 
   /** Renders the static wheel face (rim, pockets, frets, numbers, hub). */
@@ -412,6 +429,17 @@ export class Wheel {
     g.fillStyle = woodSheen;
     g.fill();
 
+    // wood grain arcs
+    for (let i = 0; i < 7; i++) {
+      const a0 = (i / 7) * TAU + 0.4;
+      const a1 = a0 + 0.45;
+      g.beginPath();
+      g.arc(c, c, R * 0.955, a0, a1);
+      g.strokeStyle = "rgba(0,0,0,0.16)";
+      g.lineWidth = 2.2;
+      g.stroke();
+    }
+
     // ---- polished gold inlay ----
     const goldGrad = g.createConicGradient ? g.createConicGradient(0, c, c) : null;
     g.beginPath();
@@ -432,6 +460,19 @@ export class Wheel {
     g.fill("evenodd");
 
     this.ringOn(g, c, R * 0.905, R * 0.885, { inner: "rgba(0,0,0,0.7)", outer: "rgba(0,0,0,0.25)" });
+
+    // ---- ball track: recessed groove where the ball rides and the frets sit ----
+    this.ringOn(g, c, R * 0.905, R * 0.878, { inner: "rgba(0,0,0,0.5)", outer: "rgba(255,255,255,0.12)" });
+    g.beginPath();
+    g.arc(c, c, R * 0.905, 0, TAU);
+    g.strokeStyle = "rgba(255,235,190,0.4)";
+    g.lineWidth = 1.4;
+    g.stroke();
+    g.beginPath();
+    g.arc(c, c, R * 0.878, 0, TAU);
+    g.strokeStyle = "rgba(0,0,0,0.45)";
+    g.lineWidth = 1.2;
+    g.stroke();
 
     // ---- pocket ring ----
     const pocketOuter = R * 0.875;
@@ -468,6 +509,13 @@ export class Wheel {
       g.closePath();
       g.fillStyle = col.gloss;
       g.fill();
+
+      // inner boundary highlight (pocket reads as recessed)
+      g.beginPath();
+      g.arc(c, c, pocketInner + R * 0.005, a0 + SLOT * 0.18, a1 - SLOT * 0.18);
+      g.strokeStyle = "rgba(255,255,255,0.10)";
+      g.lineWidth = 1.2;
+      g.stroke();
 
       // gold separators
       g.beginPath();

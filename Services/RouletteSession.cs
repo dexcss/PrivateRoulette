@@ -328,8 +328,8 @@ public sealed class RouletteSession : IDisposable
         if (!this.config.AnnouncePartyResults) return;
         if (this.IsInParty?.Invoke() != true) return;
 
-        // The wheel animation is 24.4s; hold the chat reveal until it lands.
-        _ = System.Threading.Tasks.Task.Delay(24900).ContinueWith(_ =>
+        // The wheel animation is ~28s; hold the chat reveal until it lands.
+        _ = System.Threading.Tasks.Task.Delay(28900).ContinueWith(_ =>
         {
             this.RunOnMainThread?.Invoke(() =>
             {
