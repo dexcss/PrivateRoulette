@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -36,6 +37,8 @@ public sealed unsafe class TradeService : IDisposable
     private string? partnerLabel;
     private bool pendingClose;
     private DateTime closedAt;
+    private DateTime lastPartnerAttempt = DateTime.MinValue;
+    private string lastWindowSample = string.Empty;
 
     public TradeService(
         PluginConfig config,
@@ -62,8 +65,14 @@ public sealed unsafe class TradeService : IDisposable
         {
             this.tradeOpen = true;
             this.pendingClose = false;
+            this.partnerId = null;
+            this.partnerLabel = null;
+            this.lastPartnerAttempt = DateTime.MinValue;
+            this.lastWindowSample = string.Empty;
             this.gilBefore = InventoryManager.Instance()->GetGil();
-            (this.partnerId, this.partnerLabel) = this.ResolvePartner();
+
+            // target fallback first (the dealer usually just added them)
+            this.TryResolveFromTarget();
             this.log.Debug($"trade opened: gil {this.gilBefore}, partner {this.partnerLabel ?? "unknown"} ({this.partnerId ?? "-"})");
         }
         catch (Exception e)
@@ -78,11 +87,57 @@ public sealed unsafe class TradeService : IDisposable
         this.tradeOpen = false;
         this.pendingClose = true;
         this.closedAt = DateTime.UtcNow;
+
+        // final attempts while the window still exists
+        if (this.partnerId == null)
+            this.ResolvePartnerWithFallbacks();
+    }
+
+    private void TryResolveFromTarget()
+    {
+        try
+        {
+            var target = this.session.GetTargetPlayerName?.Invoke();
+            if (string.IsNullOrEmpty(target)) return;
+            var match = this.session.FindPlayerByName(target);
+            if (match != null)
+            {
+                this.partnerId = match.Value.Id;
+                this.partnerLabel = match.Value.Name;
+            }
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
+    /// <summary>Window text scan, then current-target fallback.</summary>
+    private void ResolvePartnerWithFallbacks()
+    {
+        if (this.partnerId != null) return;
+        var (id, label) = this.ResolvePartner();
+        if (id != null)
+        {
+            this.partnerId = id;
+            this.partnerLabel = label;
+            return;
+        }
+
+        this.TryResolveFromTarget();
     }
 
     /// <summary>Framework tick: apply the trade a moment after the window closes.</summary>
     public void Tick()
     {
+        // the trade window fills in its name a moment after opening — keep trying
+        if (this.tradeOpen && this.partnerId == null &&
+            (DateTime.UtcNow - this.lastPartnerAttempt).TotalMilliseconds > 250)
+        {
+            this.lastPartnerAttempt = DateTime.UtcNow;
+            this.ResolvePartnerWithFallbacks();
+        }
+
         if (!this.pendingClose) return;
         if ((DateTime.UtcNow - this.closedAt).TotalMilliseconds < 450) return;
         this.pendingClose = false;
@@ -103,7 +158,8 @@ public sealed unsafe class TradeService : IDisposable
 
         if (this.partnerId == null)
         {
-            this.chat.Print($"[trade] {delta:+#,0;-#,0} gil changed but the trade partner wasn't matched to a seated player — adjust manually.");
+            var sample = this.lastWindowSample.Length > 120 ? this.lastWindowSample[..120] : this.lastWindowSample;
+            this.chat.Print($"[trade] {delta:+#,0;-#,0} gil changed but the partner wasn't matched{(sample.Length > 0 ? $" (window: {sample})" : string.Empty)} — target the player and trade again, or adjust manually.");
             return;
         }
 
@@ -122,33 +178,48 @@ public sealed unsafe class TradeService : IDisposable
             // 1) walk all text nodes — the partner name is rendered as text
             var texts = new List<string>(32);
             this.WalkTextNodes(addon->AtkUnitBase.RootNode, texts);
-            foreach (var text in texts)
-            {
-                if (string.IsNullOrWhiteSpace(text) || text.Length > 64) continue;
-                var match = this.session.FindPlayerByName(text.Trim());
-                if (match != null) return (match.Value.Id, match.Value.Name);
-            }
 
-            // 2) fallback: string values
+            // 2) add string values as another source
             for (var i = 0; i < addon->AtkValuesCount; i++)
             {
-                string? text;
                 try
                 {
-                    text = addon->AtkValues[i].GetValueAsString();
+                    var s = addon->AtkValues[i].GetValueAsString();
+                    if (!string.IsNullOrWhiteSpace(s)) texts.Add(s);
                 }
                 catch
                 {
-                    continue;
+                    // non-string value
                 }
-
-                if (string.IsNullOrWhiteSpace(text) || text.Length > 64) continue;
-
-                var match = this.session.FindPlayerByName(text.Trim());
-                if (match != null) return (match.Value.Id, match.Value.Name);
             }
 
-            this.log.Debug($"trade partner not matched; window texts: {string.Join(" | ", texts)}");
+            foreach (var raw in texts)
+            {
+                var text = new string(raw.Where(c => !char.IsControl(c)).ToArray()).Trim();
+                if (text.Length < 3 || text.Length > 80) continue;
+
+                // exact match against full or display name
+                var exact = this.session.FindPlayerByName(text);
+                if (exact != null) return (exact.Value.Id, exact.Value.Name);
+
+                // partial match (handles prefixes like "Trade with ...")
+                var players = this.session.State?.Players;
+                if (players == null) continue;
+                foreach (var p in players)
+                {
+                    var shortName = p.Name.Split('@')[0];
+                    if (shortName.Length < 3) continue;
+                    if (text.Contains(shortName, StringComparison.OrdinalIgnoreCase) ||
+                        shortName.Contains(text, StringComparison.OrdinalIgnoreCase))
+                        return (p.Id, p.DisplayName);
+                }
+            }
+
+            this.lastWindowSample = string.Join(" | ", texts
+                .Select(t => new string(t.Where(c => !char.IsControl(c)).ToArray()).Trim())
+                .Where(t => t.Length is > 0 and < 60)
+                .Take(4));
+            this.log.Debug($"trade partner not matched; window texts: {this.lastWindowSample}");
         }
         catch (Exception e)
         {
