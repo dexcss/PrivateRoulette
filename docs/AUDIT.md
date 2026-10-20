@@ -14,7 +14,7 @@ deployed Pages site.
 | Latest tag | `v0.8.0.0` (plus `backup-pre-revamp`) |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
 | Combined repo | PrivateRoulette `0.8.0.0` (GitHub API; raw CDN may lag ~5 min) |
-| Pages JS asset | `assets/index-M4sw-vpb.js` (current board build) |
+| Pages JS asset | `assets/index-ecbL4IAx.js` (current board build) |
 | Working tree | clean |
 | Web demo | live (`#/demo`, playable, shared payout table) |
 
@@ -113,7 +113,7 @@ deployed Pages site.
 - **Deploy (0.8.0.0)**: CI release succeeded (manifest/assembly both
   `0.8.0.0`, release published 05:48Z); the combined repo API serves
   `0.8.0.0`; the release Pages asset was `index-BCQkavbT.js` (later board
-  builds deploy independently; current is `index-M4sw-vpb.js`) and the live
+  builds deploy independently; current is `index-ecbL4IAx.js`) and the live
   demo loads; worker `/health` reports `v12`.
 
 ## 5. Findings
