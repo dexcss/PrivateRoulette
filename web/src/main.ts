@@ -1,7 +1,7 @@
 import { Api, colorOf, displayNumber, GameStateMsg, HistoryEntry, MeState, PublicBetsMsg, PublicPlayer, Role } from "./protocol";
 import { Wheel } from "./wheel";
 import { Sfx } from "./audio";
-import { Board } from "./board";
+import { Board, type BetChip } from "./board";
 
 // ---------- settings ----------
 
@@ -187,24 +187,15 @@ api.on("game_state", (d: GameStateMsg) => {
   for (const p of ((d as any).players ?? []) as any[]) {
     if (p?.id && p?.player_key) playerKeys.set(p.id, p.player_key);
   }
-  if (board && !me && d.players?.length) board.renderBets(aggregateBets(d.players));
+  if (board && d.players?.length) board.renderBets(betChips(d.players));
   renderState();
 });
 
 api.on("public_bets", (d: PublicBetsMsg) => {
   lastPlayers = d.players;
   renderPlayers(d.players);
-  if (board) {
-    if (me) {
-      const myId = me.playerId;
-      const mine = d.players.find((p) => p.id === myId);
-      if (mine) board.renderBets(mine.bets);
-      renderBalance(d.players);
-    } else {
-      // spectators and the dealer see every player's chips combined
-      board.renderBets(aggregateBets(d.players));
-    }
-  }
+  if (board) board.renderBets(betChips(d.players));
+  if (me) renderBalance(d.players);
 });
 
 api.on("table_history", (d: { history: HistoryEntry[] }) => {
@@ -252,8 +243,11 @@ function revealRound(): void {
   renderBalance(lastPlayers, true);
 }
 
-api.on("bets_updated", (d) => {
-  if (board) board.renderBets(d.bets ?? {});
+api.on("bets_updated", (d: { bets: Record<string, number> }) => {
+  if (!me || !board) return;
+  const p = lastPlayers.find((x) => x.id === me!.playerId);
+  if (p) p.bets = d.bets ?? {};
+  board.renderBets(betChips(lastPlayers));
 });
 
 api.on("cashout_ok", () => {
@@ -357,11 +351,19 @@ function renderState() {
   if (hint) hint.hidden = role !== "player";
 }
 
-function aggregateBets(players: PublicPlayer[]): Record<string, number> {
-  const out: Record<string, number> = {};
+function betChips(players: PublicPlayer[]): BetChip[] {
+  const out: BetChip[] = [];
   for (const p of players) {
     for (const [target, amount] of Object.entries(p.bets ?? {})) {
-      out[target] = (out[target] ?? 0) + amount;
+      if (amount > 0) {
+        out.push({
+          target,
+          amount,
+          color: p.color,
+          name: p.display_name,
+          mine: !!me && p.id === me.playerId,
+        });
+      }
     }
   }
   return out;
@@ -401,7 +403,7 @@ function renderPlayers(players: PublicPlayer[]) {
   playersList.innerHTML = players
     .map(
       (p) => `
-      <div class="player ${p.away ? "away" : ""}">
+      <div class="player ${p.away ? "away" : ""}" style="border-color:${p.color}66">
         <span class="dot" style="background:${p.color}"></span>
         <span class="pname">${escapeHtml(p.display_name)}</span>
         ${p.ready ? '<span class="tag ready">ready</span>' : ""}

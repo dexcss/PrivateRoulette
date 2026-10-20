@@ -112,6 +112,7 @@ public sealed class PluginConfig : IPluginConfiguration
     [JsonProperty("SoundEffects")] public bool SoundEffects { get; set; } = true;
     [JsonProperty("AutoOpenWheelOnSpin")] public bool AutoOpenWheelOnSpin { get; set; } = true;
     [JsonProperty("AnnouncePartyResults")] public bool AnnouncePartyResults { get; set; } = true;
+    [JsonProperty("ShowLauncherButton")] public bool ShowLauncherButton { get; set; } = true;
     [JsonProperty("VerboseWireLog")] public bool VerboseWireLog { get; set; } = true;
     [JsonProperty("TradeThrottleMs")] public int TradeThrottleMs { get; set; } = 800;
 

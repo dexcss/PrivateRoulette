@@ -4,12 +4,23 @@
 // In-between (split/street/corner/six-line) zones are per-cell edge overlays,
 // so they always align with the cells regardless of layout or window size.
 // Left-click adds the selected chip, right-click (or shift-click) removes.
+// Every player's chips are rendered in that player's color so spectators can
+// tell who is betting where.
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
 function colorOf(n: number): string {
   if (n === 0 || n === 37) return "#0f9d58";
   return RED.has(n) ? "#c0392b" : "#1b1b1f";
+}
+
+/** One visible chip: a player's stake on one bet target. */
+export interface BetChip {
+  target: string;
+  amount: number;
+  color: string;
+  name?: string;
+  mine?: boolean;
 }
 
 export interface BoardCallbacks {
@@ -19,9 +30,9 @@ export interface BoardCallbacks {
 
 export class Board {
   private root: HTMLElement;
-  private chipOnTarget = new Map<string, number>();
   private cells = new Map<string, HTMLElement>();
-  private zoneChips = new Map<string, HTMLElement[]>();
+  /** target -> chip containers (the cell's stack and/or an edge zone's stack) */
+  private chipHosts = new Map<string, HTMLElement[]>();
   selectedChip = 10000;
   private cb: BoardCallbacks;
 
@@ -31,32 +42,53 @@ export class Board {
     this.build();
   }
 
-  /** Refresh chip stacks shown on the board from the server's bet map. */
-  renderBets(bets: Record<string, number>): void {
-    const update = (el: HTMLElement | undefined, amt: number) => {
-      const chipEl = el?.querySelector(".chipstack") as HTMLElement | null;
-      if (!chipEl) return;
-      if (amt > 0) {
-        chipEl.textContent = formatGil(amt);
-        chipEl.style.display = "flex";
-      } else {
-        chipEl.style.display = "none";
+  /** Replace every chip stack with the current per-player chips. */
+  renderBets(chips: BetChip[]): void {
+    const byTarget = new Map<string, BetChip[]>();
+    for (const chip of chips) {
+      const list = byTarget.get(chip.target) ?? [];
+      list.push(chip);
+      byTarget.set(chip.target, list);
+    }
+
+    for (const [target, hosts] of this.chipHosts) {
+      const list = byTarget.get(target) ?? [];
+      list.sort((a, b) => Number(!!b.mine) - Number(!!a.mine) || b.amount - a.amount);
+      for (const host of hosts) {
+        host.innerHTML = "";
+        for (const chip of list) {
+          const el = document.createElement("div");
+          el.className = "pchip" + (chip.mine ? " mine" : "");
+          el.style.setProperty("--chip", chip.color);
+          el.style.color = textOn(chip.color);
+          el.textContent = formatGil(chip.amount);
+          el.title = `${chip.name ?? "Player"}: ${chip.amount.toLocaleString()} gil`;
+          host.appendChild(el);
+        }
       }
-    };
+    }
+  }
 
-    for (const [target, el] of this.cells) update(el, bets[target] ?? 0);
-    for (const [target, els] of this.zoneChips) for (const el of els) update(el, bets[target] ?? 0);
+  private host(target: string): HTMLElement {
+    const el = document.createElement("div");
+    el.className = "chipstack";
+    this.rootChipHosts(target, el);
+    return el;
+  }
 
-    this.chipOnTarget = new Map(Object.entries(bets));
+  private rootChipHosts(target: string, host: HTMLElement): void {
+    const list = this.chipHosts.get(target) ?? [];
+    list.push(host);
+    this.chipHosts.set(target, list);
   }
 
   private build(): void {
     this.root.innerHTML = "";
     // grid: col 1 = zero column (00/0), cols 2..13 = numbers, col 14 = column bets
     this.root.style.display = "grid";
-    this.root.style.gridTemplateColumns = "minmax(46px,0.75fr) repeat(12, 1fr) minmax(38px,0.55fr)";
-    this.root.style.gridTemplateRows = "repeat(3, 1fr) 0.8fr 0.8fr";
-    this.root.style.gap = "3px";
+    this.root.style.gridTemplateColumns = "minmax(52px,0.75fr) repeat(12, 1fr) minmax(44px,0.55fr)";
+    this.root.style.gridTemplateRows = "repeat(3, 1fr) 0.85fr 0.85fr";
+    this.root.style.gap = "8px";
 
     // zero column: 00 on top, 0 on bottom — both green (American table style)
     const zeroWrap = document.createElement("div");
@@ -65,7 +97,7 @@ export class Board {
     zeroWrap.style.gridRow = "1 / span 3";
     zeroWrap.style.display = "flex";
     zeroWrap.style.flexDirection = "column";
-    zeroWrap.style.gap = "3px";
+    zeroWrap.style.gap = "8px";
     this.root.appendChild(zeroWrap);
 
     const makeZero = (target: string, label: string) => {
@@ -78,9 +110,7 @@ export class Board {
       lbl.className = "label";
       lbl.textContent = label;
       el.appendChild(lbl);
-      const chip = document.createElement("div");
-      chip.className = "chipstack";
-      chip.style.display = "none";
+      const chip = this.host(target);
       el.appendChild(chip);
       el.addEventListener("click", (e) => {
         if (e.shiftKey) this.cb.remove(target); else this.cb.place(target);
@@ -146,9 +176,7 @@ export class Board {
     lbl.textContent = label;
     el.appendChild(lbl);
 
-    const chip = document.createElement("div");
-    chip.className = "chipstack";
-    chip.style.display = "none";
+    const chip = this.host(target);
     el.appendChild(chip);
 
     el.addEventListener("click", (e) => {
@@ -182,12 +210,9 @@ export class Board {
           Object.assign(z.style, { position: "absolute", pointerEvents: "auto" }, css as any);
 
           const zchip = document.createElement("div");
-          zchip.className = "chipstack zone-chip";
-          zchip.style.display = "none";
+          zchip.className = "chipstack";
+          this.rootChipHosts(target, zchip);
           z.appendChild(zchip);
-          const list = this.zoneChips.get(target) ?? [];
-          list.push(z);
-          this.zoneChips.set(target, list);
 
           z.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -201,10 +226,10 @@ export class Board {
           cell.appendChild(z);
         };
 
-        // right edge → split with n+3 (same row)
+        // right edge → split with n+3 (same row); 16px strip spans the gap
         if (col < 12) {
           zone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
-            right: "-7px", top: "4px", bottom: "4px", width: "14px",
+            right: "-8px", top: "8px", bottom: "8px", width: "16px",
           });
         }
 
@@ -213,28 +238,38 @@ export class Board {
         if (row < 3) {
           // split with the number below (3/2 or 2/1)
           zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
-            bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
+            bottom: "-8px", left: "6px", right: col < 12 ? "6px" : "-8px", height: "16px",
           });
           if (col < 12) {
             zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
-              bottom: "-7px", right: "-7px", width: "14px", height: "14px",
+              bottom: "-8px", right: "-8px", width: "16px", height: "16px",
             });
           }
         } else {
           // bottom row: street under the column (1-2-3, 4-5-6, ...)
           zone(`street-${n}-${n + 1}-${n + 2}`, `Street ${n}/${n + 1}/${n + 2}`, {
-            bottom: "-7px", left: "5px", right: col < 12 ? "5px" : "-7px", height: "14px",
+            bottom: "-8px", left: "6px", right: col < 12 ? "6px" : "-8px", height: "16px",
           });
           if (col < 12) {
             // six line at the corner between this column and the next
             zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 3}-${n + 4}-${n + 5}`, `Six line ${n}-${n + 2}/${n + 3}-${n + 5}`, {
-              bottom: "-7px", right: "-7px", width: "14px", height: "14px",
+              bottom: "-8px", right: "-8px", width: "16px", height: "16px",
             });
           }
         }
       }
     }
   }
+}
+
+/** Pick black or white chip text for a player color. */
+function textOn(hex: string): string {
+  const m = hex.replace("#", "");
+  if (m.length !== 6) return "#fff";
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#111" : "#fff";
 }
 
 function formatGil(n: number): string {

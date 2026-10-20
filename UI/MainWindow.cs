@@ -717,6 +717,15 @@ public sealed class SettingsWindow : Window
             this.config.Save();
         }
 
+        MainWindow.SectionText("Interface");
+        var launcher = this.config.ShowLauncherButton;
+        if (ImGui.Checkbox("Show the floating in-game launcher button", ref launcher))
+        {
+            this.config.ShowLauncherButton = launcher;
+            this.config.Save();
+        }
+        ImGui.TextDisabled("The 'Dealer console' button on screen. /pr always opens the console.");
+
         var sounds = this.config.SoundEffects;
         if (ImGui.Checkbox("Sound effects (Phase 2)", ref sounds))
         {
