@@ -259,10 +259,10 @@ export class Board {
           cell.appendChild(z);
         };
 
-        // right edge → split with n+3 (same row); 24px strip spans the gap
+        // right edge → split with n+3 (same row); centred on the MIDDLE of the gap
         if (col < 12) {
           zone(`split-${n}-${n + 3}`, `Split ${n}/${n + 3}`, {
-            right: "-12px", top: "8px", bottom: "8px", width: "24px",
+            right: "-16px", top: "8px", bottom: "8px", width: "24px",
           });
         }
 
@@ -271,22 +271,22 @@ export class Board {
         if (row < 3) {
           // split with the number below (3/2 or 2/1)
           zone(`split-${n}-${n - 1}`, `Split ${n}/${n - 1}`, {
-            bottom: "-12px", left: "6px", right: col < 12 ? "6px" : "-12px", height: "24px",
+            bottom: "-16px", left: "6px", right: col < 12 ? "6px" : "-16px", height: "24px",
           });
           if (col < 12) {
             zone(`corner-${n}-${n + 3}-${n - 1}-${n + 2}`, `Corner ${n}/${n + 3}/${n - 1}/${n + 2}`, {
-              bottom: "-12px", right: "-12px", width: "24px", height: "24px",
+              bottom: "-16px", right: "-16px", width: "24px", height: "24px",
             });
           }
         } else {
           // bottom row: street under the column (1-2-3, 4-5-6, ...)
           zone(`street-${n}-${n + 1}-${n + 2}`, `Street ${n}/${n + 1}/${n + 2}`, {
-            bottom: "-12px", left: "6px", right: col < 12 ? "6px" : "-12px", height: "24px",
+            bottom: "-16px", left: "6px", right: col < 12 ? "6px" : "-16px", height: "24px",
           });
           if (col < 12) {
             // six line at the corner between this column and the next
             zone(`sixline-${n}-${n + 1}-${n + 2}-${n + 3}-${n + 4}-${n + 5}`, `Six line ${n}-${n + 2}/${n + 3}-${n + 5}`, {
-              bottom: "-12px", right: "-12px", width: "24px", height: "24px",
+              bottom: "-16px", right: "-16px", width: "24px", height: "24px",
             });
           }
         }
