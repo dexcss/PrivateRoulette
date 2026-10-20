@@ -93,6 +93,11 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
 - During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
   must render inside its dark/gold box, and the box must be above every
   number, line, dot and chip (screenshot check).
+- Covered-number hover (pointerover on the target, then count
+  `.cell.covered`): `red`/`black`/`odd`/`even`/`low`/`high` → 18;
+  `dozen-1`/`col-1` → 12; `split-3-6` → 2; `street-1-2-3` → 3;
+  `corner-3-6-2-5` → 4; `sixline-1-2-3-4-5-6` → 6; `topline` → 5;
+  `split-0-37` → 2; pointerover on `#board` clears. Read-only boards stay at 0.
 - Uniform outside row: the six even-money cells must have equal widths;
   dozens equal; number cells equal.
 - Corner chip: centered on the four-cell intersection, fully visible.

@@ -274,6 +274,7 @@ api.on("chat_message", (m: any) => {
 
 api.on("spin", (d) => {
   if (!wheel) return;
+  board?.clearHighlight();
   wheel.spinTo(d.result);
   renderProof(d);
   renderHistoryFromSpin(d.result);
@@ -377,6 +378,7 @@ function renderState() {
   }
   if (role === "spectator") statusLabel.textContent = "spectating";
   boardEl.classList.toggle("readonly", role !== "player");
+  if (role !== "player" || waiting) board?.clearHighlight();
 
   // dealer controls
   dealerBar.hidden = role !== "dealer";

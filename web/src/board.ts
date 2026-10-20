@@ -42,6 +42,8 @@ export class Board {
   private cells = new Map<string, HTMLElement>();
   /** target -> chip containers (the cell's stack and/or an edge zone's stack) */
   private chipHosts = new Map<string, HTMLElement[]>();
+  /** number cells currently showing the "covered by this bet" glow */
+  private highlighted: HTMLElement[] = [];
   selectedChip = 10000;
   private cb: BoardCallbacks;
 
@@ -49,6 +51,77 @@ export class Board {
     this.root = root;
     this.cb = cb;
     this.build();
+
+    // Hovering any bet (cell or line/dot) glows every number it covers.
+    this.root.addEventListener("pointerover", (e) => {
+      const el = (e.target as Element | null)?.closest<HTMLElement>(".cell, .cellzone");
+      this.highlight(el?.dataset.target ?? null);
+    });
+    this.root.addEventListener("pointerleave", () => this.clearHighlight());
+  }
+
+  /** Clear the covered-number glow (e.g. when the table locks). */
+  clearHighlight(): void {
+    this.highlight(null);
+  }
+
+  private highlight(target: string | null): void {
+    for (const el of this.highlighted) el.classList.remove("covered");
+    this.highlighted = [];
+
+    // Spectators/dealers get a read-only board; keep their hover inert like
+    // the existing read-only cell styles.
+    if (!target || this.root.classList.contains("readonly")) return;
+
+    for (const n of this.coveredNumbers(target)) {
+      const el = this.cells.get(`n-${n}`);
+      if (el && !this.highlighted.includes(el)) {
+        el.classList.add("covered");
+        this.highlighted.push(el);
+      }
+    }
+  }
+
+  /** Numbers covered by a bet target (zeros included as 0/37). */
+  private coveredNumbers(target: string): number[] {
+    const t = target.toLowerCase();
+
+    if (t.startsWith("n-")) {
+      const n = Number(t.slice(2));
+      return Number.isFinite(n) ? [n] : [];
+    }
+
+    if (t.startsWith("split-") || t.startsWith("street-") || t.startsWith("corner-") || t.startsWith("sixline-")) {
+      return t.slice(t.indexOf("-") + 1)
+        .split("-")
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n >= 0 && n <= 37);
+    }
+
+    if (t.startsWith("dozen-")) {
+      const d = Number(t.slice(6));
+      if (d < 1 || d > 3) return [];
+      const first = (d - 1) * 12 + 1;
+      return Array.from({ length: 12 }, (_, i) => first + i);
+    }
+
+    if (t.startsWith("col-")) {
+      const c = Number(t.slice(4));
+      if (c < 1 || c > 3) return [];
+      return Array.from({ length: 12 }, (_, i) => i * 3 + c);
+    }
+
+    switch (t) {
+      case "red": return [...RED];
+      case "black": return Array.from({ length: 36 }, (_, i) => i + 1).filter((n) => !RED.has(n));
+      case "odd": return Array.from({ length: 18 }, (_, i) => i * 2 + 1);
+      case "even": return Array.from({ length: 18 }, (_, i) => i * 2 + 2);
+      case "low": return Array.from({ length: 18 }, (_, i) => i + 1);
+      case "high": return Array.from({ length: 18 }, (_, i) => i + 19);
+      case "topline": return [0, 37, 1, 2, 3];
+      case "firstfour": return [0, 1, 2, 3];
+      default: return [];
+    }
   }
 
   /** Replace every chip stack with the current per-player chips. */

@@ -189,8 +189,12 @@ the spin and flushes it in `revealRound()`.
   on the bottom line so a bet is not drawn twice). The zero column adds the
   0/00 split, 0/1 and 00/3 splits, the 0-1-2 / 00-2-3 trios and first four
   (0/1/2/3). Zones are above cells (`z-index: 8`); avoid `filter` on hover
-  (stacking context clips chips). The spin blocker is `z-index: 60` and renders
-  a gold-bordered box above every cell, line, dot and chip.
+  (stacking context clips chips). Hovering any cell or line/dot adds `.covered`
+  to every number cell the bet covers (red/black, odd/even, low/high,
+  dozens/columns, splits/streets/corners/six-lines, zero bets), with the same
+  gold inset/outer glow; it clears on pointer-leave and when the table locks.
+  The spin blocker is `z-index: 60` and renders a gold-bordered box above
+  every cell, line, dot and chip.
 - **Chips**: one `.pchip` per player per target, colored by the server's
   player color, stable order (own chips first, then player id), DOM reuse
   keyed by player id.
