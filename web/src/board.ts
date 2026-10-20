@@ -180,13 +180,13 @@ export class Board {
     this.cell("dozen-2", "2nd 12", "#20242c", 6, 4, 4);
     this.cell("dozen-3", "3rd 12", "#20242c", 10, 4, 4);
 
-    // even money
-    this.cell("low", "1-18", "#20242c", 2, 5, 3);
-    this.cell("even", "EVEN", "#20242c", 5, 5, 2);
-    this.cell("red", "RED", "#c0392b", 7, 5, 1);
-    this.cell("black", "BLACK", "#1b1b1f", 8, 5, 1);
-    this.cell("odd", "ODD", "#20242c", 9, 5, 2);
-    this.cell("high", "19-36", "#20242c", 11, 5, 3);
+    // even money — six uniform boxes, like a modern online-casino layout
+    this.cell("low", "1-18", "#20242c", 2, 5, 2);
+    this.cell("even", "EVEN", "#20242c", 4, 5, 2);
+    this.cell("red", "RED", "#c0392b", 6, 5, 2);
+    this.cell("black", "BLACK", "#1b1b1f", 8, 5, 2);
+    this.cell("odd", "ODD", "#20242c", 10, 5, 2);
+    this.cell("high", "19-36", "#20242c", 12, 5, 2);
 
     // top line under the zeros
     const tl = this.cell("topline", "TOP", "#20242c", 1, 4, 1);

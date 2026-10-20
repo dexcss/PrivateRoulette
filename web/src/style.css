@@ -177,7 +177,9 @@ canvas { display: block; filter: drop-shadow(0 18px 42px rgba(0,0,0,.55)); }
 }
 .cell:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.45), inset 0 0 10px rgba(255,255,255,.12); }
 .cell .label { position: relative; z-index: 1; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.75), 0 0 5px rgba(0,0,0,.35); }
-.cell.outside .label { font-size: 12px; letter-spacing: .8px; }
+.cell.outside .label { font-size: 12.5px; letter-spacing: .5px; white-space: nowrap; }
+/* neutral outside boxes get the gold casino treatment */
+.cell.dark .label { color: #ecd9a0; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
 
 /* Chip stacks are transparent flex containers; each player's chip is a .pchip.
    Keeping the stack centered means a corner chip covers all four boxes and a
