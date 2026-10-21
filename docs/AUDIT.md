@@ -2,19 +2,19 @@
 
 Audit performed while FFXIV was in maintenance, against the local source, the
 live worker, the latest GitHub release, the combined Dalamud repo and the
-deployed Pages site.
+deployed Pages site. Updated 2026-10-21 with the `0.8.1.0` chip/timing polish.
 
 ## 1. Snapshot
 
 | Item | Value |
 |---|---|
-| Plugin source version | `0.8.0.0` (`PrivateRoulette.csproj`) |
-| Per-plugin repo manifest | `0.8.0.0` (`repo.json`) |
-| Latest GitHub release | `v0.8.0.0` — 2026-10-20T05:48:39Z (asset + DLL verified) |
-| Latest tag | `v0.8.0.0` (plus `backup-pre-revamp`) |
+| Plugin source version | `0.8.1.0` (`PrivateRoulette.csproj`) |
+| Per-plugin repo manifest | `0.8.1.0` (`repo.json`) |
+| Latest GitHub release | `v0.8.1.0` — 2026-10-21T00:21:19Z (asset + DLL verified) |
+| Latest tag | `v0.8.1.0` (plus `backup-pre-revamp`) |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
-| Combined repo | PrivateRoulette `0.8.0.0` (GitHub API; raw CDN may lag ~5 min) |
-| Pages JS asset | `assets/index-cn5NMmM1.js` (current board build) |
+| Combined repo | PrivateRoulette `0.8.1.0` (GitHub API; raw CDN may lag ~5 min) |
+| Pages JS asset | `assets/index-BxAO5_8F.js` (current build) |
 | Working tree | clean |
 | Web demo | live (`#/demo`, playable, shared payout table) |
 
@@ -113,8 +113,11 @@ deployed Pages site.
 - **Deploy (0.8.0.0)**: CI release succeeded (manifest/assembly both
   `0.8.0.0`, release published 05:48Z); the combined repo API serves
   `0.8.0.0`; the release Pages asset was `index-BCQkavbT.js` (later board
-  builds deploy independently; current is `index-cn5NMmM1.js`) and the live
+  builds deploy independently; current is `index-BxAO5_8F.js`) and the live
   demo loads; worker `/health` reports `v12`.
+- **Deploy (0.8.1.0)**: release manifest/assembly both `0.8.1.0`; Pages
+  `index-BxAO5_8F.js` / `index-BTrFdyfx.css`; combined repo API `0.8.1.0`;
+  30px white-outlined chips; demo spin measured 23.17s.
 
 ## 5. Findings
 
@@ -215,7 +218,7 @@ the wrong player, read the `[trade] opened/unmatched` lines in
 | Web demo | 1M bankroll, 100k on straight 17 + split 3-6 + corner 3-6-2-5; balance frozen at 1,000,000 during the spin; landed 00; revealed 700,000 and `▼ 300,000`; looped to the next betting window |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
 
-**Not tested in-game (maintenance):** the new 0.8.0.0 wheel motion, the plugin
+**Not tested in-game (maintenance):** the new 0.8.1.0 wheel motion/timing, the plugin
 chat send box, and the automatic table-chat announcements. They compile and
 use only existing, previously verified APIs, but need a `/pr` smoke test when
 the game is back.
@@ -237,7 +240,7 @@ the game is back.
 
 ## 8. Recommended next steps
 
-1. In-game smoke test of 0.8.0.0 (wheel motion, chat input, auto
+1. In-game smoke test of 0.8.1.0 (23s wheel motion, chat input, auto
    announcements) once maintenance ends.
 2. Optional: batch Durable Object storage writes (the bet flood limiter covers
    the private-table case).
