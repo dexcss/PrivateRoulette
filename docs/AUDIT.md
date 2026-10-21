@@ -14,7 +14,7 @@ deployed Pages site. Updated 2026-10-21 with the `0.8.1.0` chip/timing polish.
 | Latest tag | `v0.8.1.0` (plus `backup-pre-revamp`) |
 | Backend health | `{"ok":true,"service":"private-roulette-api","version":"v12"}` |
 | Combined repo | PrivateRoulette `0.8.1.0` (GitHub API; raw CDN may lag ~5 min) |
-| Pages JS asset | `assets/index-BxAO5_8F.js` (current build) |
+| Pages JS asset | `assets/index-fmBWe-L5.js` (current build) |
 | Working tree | clean |
 | Web demo | live (`#/demo`, playable, shared payout table) |
 
