@@ -191,8 +191,8 @@ the wrong player, read the `[trade] opened/unmatched` lines in
 `dalamud.log`. The gil delta itself is exact (gil snapshot at open/close).
 
 ### P3 — Release/CDN operational traps
-- Tags must be four-part and match the manifest: `v0.8.0.0` ↔
-  `<Version>0.8.0.0</Version>` ↔ manifest `0.8.0.0`. A 3-part project
+- Tags must be four-part and match the manifest: `v0.8.1.0` ↔
+  `<Version>0.8.1.0</Version>` ↔ manifest `0.8.1.0`. A 3-part project
   version produces a manifest mismatch; Dalamud rejects it as "Load failed"
   (and the CI guard now fails the build).
 - `raw.githubusercontent.com/dexcss/DalamudPlugins` caches `repo.json` for up

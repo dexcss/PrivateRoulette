@@ -97,6 +97,9 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
   stroke/shadow on the dark medallion; computed styles should show the
   colored conic rim and `inset: 4px` dark `::before`. Check at least one
   light-colored player chip and one dark-colored chip for contrast.
+- Spin duration: click **Spin now**, poll `#betting-blocker.hidden`, and
+  expect ~23.17s (23s wheel + polling/render margins). Do not rely on the
+  header status text alone; it may update a frame late.
 - During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
   must render inside its dark/gold box, and the box must be above every
   number, line, dot and chip (screenshot check).

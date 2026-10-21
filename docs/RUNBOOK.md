@@ -126,7 +126,7 @@ curl https://private-roulette-api.dexcss-roulette.workers.dev/health
 | Balance updates instantly | Reveal guard broken: web `renderBalance`/`renderPlayers`, in-game party delay (23.9s). |
 | Wheel tiny / not resizing | Canvas sized while hidden; ResizeObserver + `refreshSize()` on table show. |
 | Corner/split hover glow off | Zones must be centered on the gap middle (cell edge + 4px for an 8px gap). |
-| Chip clipped under neighboring cells | A `filter` (or other stacking-context trigger) on the hovered cell; use box-shadow. |
+| Chip clipped under neighboring cells | A `z-index` on a hovered/covered `.cell` (stacking context) or a `filter`; keep cells `z-index: auto`, zones at 8, chips at 6. |
 | Dealer page doesn't auto-login | URL token missing/stripped; token in localStorage; `#/dealer/{game}/{token}`. |
 | Demo not working | `#/demo`; hard-refresh; check browser console. |
 

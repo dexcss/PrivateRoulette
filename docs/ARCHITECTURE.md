@@ -198,9 +198,10 @@ the spin and flushes it in `revealRound()`.
   gold inset/outer glow; it clears on pointer-leave and when the table locks.
   The spin blocker is `z-index: 60` and renders a gold-bordered box above
   every cell, line, dot and chip.
-- **Chips**: one `.pchip` per player per target, colored by the server's
-  player color, stable order (own chips first, then player id), DOM reuse
-  keyed by player id.
+- **Chips**: one `.pchip` per player per target; 32px dark-medallion disc
+  (colored outer rim / ivory dashes / dark inset face) with a white 10px
+  tabular `.pchip-label` span. Player color comes from the server; stable
+  order (own chips first, then player id); DOM reuse keyed by player id.
 - **Optimistic betting**: place/remove push a pending op and render
   immediately; server `public_bets`/`bets_updated` reconcile (`expected`
   amount per target); errors clear pending. One render per animation frame.
