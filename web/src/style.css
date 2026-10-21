@@ -204,25 +204,47 @@ canvas { display: block; filter: drop-shadow(0 18px 42px rgba(0,0,0,.55)); }
 .pchip {
   flex: 0 0 auto;
   position: relative;
-  width: 30px; height: 30px; border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 900; font-size: 10px; letter-spacing: -.35px;
-  color: #fff;
-  -webkit-text-stroke: .7px rgba(0, 0, 0, .9);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .9), 0 0 2px rgba(0, 0, 0, .8);
   background:
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--chip, #c9a227) 80%, #fff) 0 47%, transparent 47%),
-    radial-gradient(circle, var(--chip, #c9a227) 0 68%, transparent 68%),
-    repeating-conic-gradient(#f6f2e8 0 16deg, color-mix(in srgb, var(--chip, #c9a227) 55%, #000) 16deg 32deg);
-  border: 1px solid rgba(0,0,0,.35);
+    radial-gradient(circle at 35% 28%, rgba(255,255,255,.32), transparent 38%),
+    repeating-conic-gradient(from 0deg, #f6f2e8 0 6deg, var(--chip, #c9a227) 6deg 22.5deg);
+  border: 1px solid rgba(0,0,0,.5);
   box-shadow:
-    inset 0 1px 1px rgba(255,255,255,.5),
-    inset 0 -1px 2px rgba(0,0,0,.45),
-    0 2px 6px rgba(0,0,0,.6);
+    inset 0 1px 1px rgba(255,255,255,.55),
+    inset 0 -2px 3px rgba(0,0,0,.4),
+    0 3px 7px rgba(0,0,0,.65);
 }
+/* Dark medallion: the denomination stays white and crisp on every rim color. */
 .pchip::before {
-  content: ""; position: absolute; inset: 7px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.5); pointer-events: none;
+  content: ""; position: absolute; inset: 4px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 30%, rgba(255,255,255,.18), transparent 48%),
+    radial-gradient(circle, #282c35, #080a0e 80%);
+  border: 1px solid rgba(255,255,255,.22);
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,.14),
+    inset 0 -2px 5px rgba(0,0,0,.75);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Small fixed gloss, independent of the rim stripes. */
+.pchip::after {
+  content: ""; position: absolute; left: 19%; top: 9%;
+  width: 44%; height: 18%; border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,.4), transparent);
+  transform: rotate(-18deg);
+  pointer-events: none;
+  z-index: 3;
+}
+.pchip-label {
+  position: relative; z-index: 2;
+  color: #fff;
+  font-weight: 900; font-size: 10px; line-height: 1;
+  letter-spacing: -.6px;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: .25px rgba(0,0,0,.55);
+  text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.75);
 }
 .pchip.mine { outline: 2px solid #f3d47c; outline-offset: 1px; }
 .pchip.new { animation: chipIn .12s ease-out; }

@@ -94,9 +94,11 @@ column supports 0/00, 0/1, 00/3, 0/2 and 00/2 splits, 0-1-2 / 00-2-3 / 0-00-2
 trios and first four; hovering any bet glows every number it covers (Red → all 18 red cells,
 dozens/columns → 12, splits/streets/corners/six-lines → their numbers); and
 the spin blocker is a `z-index: 60` gold-bordered box that covers every cell,
-line, dot and chip. Covered/hovered cells deliberately keep `z-index: auto`
-so split/corner chips are never trapped under neighboring numbers.
-Web-only deploy — the plugin/backend versions are unchanged.
+line, dot and chip. Chips are 32px dark-medallion discs (colored rim, white
+tabular text) so amounts stay readable on every player color. Covered/hovered
+cells deliberately keep `z-index: auto` so split/corner chips are never
+trapped under neighboring numbers. Web-only deploy — the plugin/backend
+versions are unchanged.
 
 ## Known issues / next steps
 

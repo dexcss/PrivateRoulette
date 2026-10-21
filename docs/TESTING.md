@@ -93,6 +93,10 @@ const b = document.querySelector('.cell[data-target="n-6"]').getBoundingClientRe
   demo/backend should settle it (see `pr_zerobets.mjs`). The `street-0-37-2`
   dot must sit on the right end of the 0/00 split line; `split-37-2` and
   `split-0-2` must meet that dot at the same Y (within 1px).
+- Chips: `.pchip` is 32×32; `.pchip-label` is white 10px with a dark
+  stroke/shadow on the dark medallion; computed styles should show the
+  colored conic rim and `inset: 4px` dark `::before`. Check at least one
+  light-colored player chip and one dark-colored chip for contrast.
 - During a spin, `#betting-blocker` must have `z-index: 60`, `#lock-label`
   must render inside its dark/gold box, and the box must be above every
   number, line, dot and chip (screenshot check).

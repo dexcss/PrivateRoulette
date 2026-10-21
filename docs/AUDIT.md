@@ -117,7 +117,9 @@ deployed Pages site. Updated 2026-10-21 with the `0.8.1.0` chip/timing polish.
   demo loads; worker `/health` reports `v12`.
 - **Deploy (0.8.1.0)**: release manifest/assembly both `0.8.1.0`; Pages
   `index-BxAO5_8F.js` / `index-BTrFdyfx.css`; combined repo API `0.8.1.0`;
-  30px white-outlined chips; demo spin measured 23.17s.
+  the 0.8.1.0 build used 30px white-outlined chips; demo spin measured
+  23.17s. A later web-only chip pass uses 32px dark-medallion chips
+  (`index-fmBWe-L5.js` / `index-C_WBEvlM.css`).
 
 ## 5. Findings
 

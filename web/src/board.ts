@@ -165,7 +165,13 @@ export class Board {
           el.classList.toggle("mine", !!chip.mine);
           el.style.setProperty("--chip", chip.color);
           const text = formatGil(chip.amount);
-          if (el.textContent !== text) el.textContent = text;
+          let label = el.querySelector<HTMLElement>(".pchip-label");
+          if (!label) {
+            label = document.createElement("span");
+            label.className = "pchip-label";
+            el.appendChild(label);
+          }
+          if (label.textContent !== text) label.textContent = text;
           el.title = `${chip.name ?? "Player"}: ${chip.amount.toLocaleString()} gil`;
         }
 
