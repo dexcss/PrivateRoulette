@@ -109,7 +109,7 @@ export class Wheel {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  spinTo(result: number, durationMs = 28000): void {
+  spinTo(result: number, durationMs = 23000): void {
     if (this.spin) return;
     const pocketIndex = ORDER.indexOf(result);
     // pocket-centre angle relative to the wheel

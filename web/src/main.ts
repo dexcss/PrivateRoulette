@@ -1011,7 +1011,7 @@ function demoStartSpin(): void {
 
   renderState();
   queueRender();
-  wheel.spinTo(result, 28000);
+  wheel.spinTo(result, 23000);
 }
 
 function demoNextRound(): void {

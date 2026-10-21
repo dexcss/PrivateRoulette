@@ -14,7 +14,7 @@
 
 `#/demo` is a complete local game:
 
-- 20s betting window / **Spin now**; 28s wheel; payouts; winners chat;
+- 20s betting window / **Spin now**; 23s wheel; payouts; winners chat;
   balances; NPCs re-bet each round.
 - Test: place a 100k chip on a number, a split, a corner; header shows
   `1,000,000 gil · X left`; right-click removes; place >500k total → limit
@@ -142,7 +142,7 @@ After tagging and the workflows finish:
 - [ ] Player bets all board types (straight/split/street/corner/six-line/
       first-four/dozens/columns/even-money); limits reject correctly.
 - [ ] Spectator sees the board and aggregate chips; cannot bet.
-- [ ] Request spin + `/random` capture; wheel 28s on web and in-game.
+- [ ] Request spin + `/random` capture; wheel 23s on web and in-game.
 - [ ] Thin champagne lines/dots between numbers are visible; clicking a
       line/dot places the matching split/street/corner/six-line; only the
       bottom perimeter has street/six-line targets.
@@ -155,7 +155,7 @@ After tagging and the workflows finish:
 - [ ] Plugin table-chat input posts to the web and the dealer web console chat
       input posts back.
 - [ ] Auto announcements: game info on create, last call/current bets on lock,
-      results after settle; party `Win` line after 28.9s.
+      results after settle; party `Win` line after 23.9s.
 - [ ] Reveal deferred on web; party announcement after the wheel.
 - [ ] Winners line lists player/bet/profit; balances/net correct.
 - [ ] VIP toggle changes caps; cashout works; ledger/CSV export.

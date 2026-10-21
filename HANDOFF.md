@@ -4,7 +4,7 @@
 > console + wheel), Cloudflare Worker + Durable Object backend, and a static
 > web client (players/spectators/dealer console/playable demo).
 >
-> **Current release: `0.8.0.0`** (tag `v0.8.0.0`) · backend **DO v12** ·
+> **Current release: `0.8.1.0`** (tag `v0.8.1.0`) · backend **DO v12** ·
 > web demo at `https://dexcss.github.io/PrivateRoulette/#/demo`
 
 This is the first file to read in a new session. Then:
@@ -47,8 +47,8 @@ repo.json                   per-plugin Dalamud repo manifest
 
 | Thing | Where | Current |
 |---|---|---|
-| Plugin release | `github.com/dexcss/PrivateRoulette/releases` | `v0.8.0.0` |
-| Combined Dalamud repo | `github.com/dexcss/DalamudPlugins` (`repo.json`) | PrivateRoulette `0.8.0.0` |
+| Plugin release | `github.com/dexcss/PrivateRoulette/releases` | `v0.8.1.0` |
+| Combined Dalamud repo | `github.com/dexcss/DalamudPlugins` (`repo.json`) | PrivateRoulette `0.8.1.0` |
 | Backend | `wss://private-roulette-api.dexcss-roulette.workers.dev/ws` | DO `v12` |
 | Web client | `https://dexcss.github.io/PrivateRoulette/` | Pages from `main` |
 | Web demo | `…#/demo` | playable, no backend |
@@ -58,7 +58,7 @@ repo.json                   per-plugin Dalamud repo manifest
 1. `/pr` → paste the dealer token (matches the worker `DEALER_TOKEN` secret) → create a game.
 2. Add players (`Name@World`, buy-in, VIP/free play) → trade gil (auto-credits the balance) or adjust manually.
 3. Send the per-player invite link (`Link`/`Tell`) — `https://dexcss.github.io/PrivateRoulette/#/{gameId}/{playerKey}`.
-4. Players bet; **Request spin** (control mode) → roll `/random 1000` or type the dice → the wheel spins on both ends for 28s.
+4. Players bet; **Request spin** (control mode) → roll `/random 1000` or type the dice → the wheel spins on both ends for 23s.
 5. At landing: balance reveal + winners line + party chat (`Number N (color)! Name +X on <bet>; …`).
 6. Cash out players (trade back). Ledger/CSV in the dealer console/web console.
 
@@ -109,8 +109,8 @@ Web-only deploy — the plugin/backend versions are unchanged.
 3. The in-game wheel now matches the web's **motion**, but its art is still
    ImGui-drawn (flat pockets, no canvas gradients). The web remains the
    premium visual reference.
-4. The party reveal delay is hard-coded to 28.9s in `RouletteSession` to match
-   the 28s wheel. If either duration changes, update both.
+4. The party reveal delay is hard-coded to 23.9s in `RouletteSession` to match
+   the 23s wheel. If either duration changes, update both.
 5. Plugin sound effects are not implemented (the web has synthesized audio);
    the dead setting was removed. Tips are recorded via adjustments /
    `record_payout`; there is no dedicated tip button yet.

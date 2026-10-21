@@ -158,9 +158,9 @@ street/corner/sixline/topline/firstfour; limits use that split.
    bets, unlocks, then broadcasts in order: `spin`, `round_result` (with
    `results`), `table_history`, `public_bets`, `game_state`, then a system
    chat line "Number N (color)! Name +X on bet; …".
-4. Clients animate for 28s. The web freezes balances/chat until the wheel
+4. Clients animate for 23s. The web freezes balances/chat until the wheel
    lands (`pendingRound` + wheel settle) then reveals; the plugin delays the
-   party announcement 28.9s.
+   party announcement 23.9s.
 5. Next round: players bet again; dealer requests another spin.
 
 **Announcements.** The plugin renders the configurable templates into table
@@ -210,7 +210,7 @@ the spin and flushes it in `revealRound()`.
 - **Wheel**: pre-rendered face (wood/gold/pockets/frets/groove, fixed gloss
   overlay) rotated each frame; ball animated top-down with independent rotor
   and relative-ball progress, a long crawl on the number track, tiny slow
-  fret bumps, smoothstepped radius transitions and an exact landing. 28s.
+  fret bumps, smoothstepped radius transitions and an exact landing. 23s.
 - **Demo**: local engine **imports the backend payout table** from
   `server/src/fairness.ts` (Vite `server.fs.allow: [".."]`), 20s betting window,
   countdown ticker, NPC random bets, `Spin now`, payout/results chat,

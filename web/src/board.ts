@@ -164,7 +164,6 @@ export class Board {
 
           el.classList.toggle("mine", !!chip.mine);
           el.style.setProperty("--chip", chip.color);
-          el.style.color = textOn(chip.color);
           const text = formatGil(chip.amount);
           if (el.textContent !== text) el.textContent = text;
           el.title = `${chip.name ?? "Player"}: ${chip.amount.toLocaleString()} gil`;
@@ -415,16 +414,6 @@ export class Board {
       left: "-16px", bottom: "-16px", width: "24px", height: "24px",
     }, "zone-corner");
   }
-}
-
-/** Pick black or white chip text for a player color. */
-function textOn(hex: string): string {
-  const m = hex.replace("#", "");
-  if (m.length !== 6) return "#fff";
-  const r = parseInt(m.slice(0, 2), 16);
-  const g = parseInt(m.slice(2, 4), 16);
-  const b = parseInt(m.slice(4, 6), 16);
-  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#111" : "#fff";
 }
 
 function formatGil(n: number): string {

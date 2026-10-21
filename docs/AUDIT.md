@@ -26,7 +26,7 @@ deployed Pages site.
 - `Services/SocketService.cs` — WebSocket client, hello/auth, event dispatch,
   reconnect, heartbeat.
 - `Services/RouletteSession.cs` — session state, game/player/bet actions,
-  spin flow, party reveal (28.9s delay), dealer web URL, VIP toggles.
+  spin flow, party reveal (23.9s delay), dealer web URL, VIP toggles.
 - `Services/DiceService.cs` — `/random` chat parser (EN/DE/FR/JP), character
   context; announcements queue (currently unwired).
 - `Services/TradeService.cs` — trade addon open/close, gil delta, partner
@@ -35,7 +35,7 @@ deployed Pages site.
   `UIModule::ProcessChatBoxEntry` → `Dtor(true)`.
 - `UI/MainWindow.cs` — dealer console (games, players, adjustments, VIP,
   cashout, link/tell, spin controls, ledger/CSV, stats, settings).
-- `UI/WheelWindow.cs` — in-game wheel (ImGui draw list, 28s rotor-relative).
+- `UI/WheelWindow.cs` — in-game wheel (ImGui draw list, 23s rotor-relative).
 - `UI/PluginUi.cs` — window system and UI hooks.
 
 ### Backend (Cloudflare Worker + Durable Object)
@@ -78,7 +78,7 @@ deployed Pages site.
 | Web | player/spectator/dealer routes, 00 board, colored chips, uniform row | ✅ |
 | Web | playable demo (bet, NPCs, payouts, countdown, rebet/clear/cashout) | ✅ |
 | Web | responsive resize (wheel ResizeObserver, hidden-view sizing) | ✅ |
-| Plugin | in-game wheel + dealer console | ✅ motion now matches web (28s profile/fret bumps) |
+| Plugin | in-game wheel + dealer console | ✅ motion now matches web (23s profile/fret bumps) |
 | Plugin | table chat panel + dealer chat input | ✅ |
 | Plugin | plugin sound effects | removed (web-only audio; dead toggle deleted) |
 | Plugin | announcement templates ($Name/$Bets/…) | ✅ auto + manual announcements wired |
@@ -101,7 +101,7 @@ deployed Pages site.
   UnVIP).
 - **Reveal**: early sample during a spin showed the old balance/chat; after
   landing the balance, net and winners line appeared. In-game party delay
-  set to 28.9s to match the 28s wheel.
+  set to 23.9s to match the 23s wheel.
 - **Wheel**: pixel sampling at t≈2s → ball on rim (ratio ~0.91); mid-crawl →
   number track (~0.83–0.86); after landing → pocket (~0.69); exact result
   confirmed via balance/chat.
@@ -156,11 +156,11 @@ storage, as expected).
 ### P2 — In-game wheel was behind the web wheel — **FIXED (motion)**
 The web wheel received the physics-flavoured revamp (independent rotor/ball
 timing, number-track crawl, fret bumps, smoothstepped radius). The plugin
-wheel is now ported to the same profile: 28s, 8–10 ball turns, rim → 0.862R
+wheel is now ported to the same profile: 23s, 8–10 ball turns, rim → 0.862R
 track crawl → 0.69R pocket, 0.8% fret hops, enveloped settle wobble, exact
 landing. The post-settle idle-angle jump was also fixed (the old code reset to
 a wall-clock angle). The plugin art is still ImGui-drawn, so the web remains
-the visual reference. `RouletteSession` party delay stays 28.9s — keep it in
+the visual reference. `RouletteSession` party delay stays 23.9s - keep it in
 sync if the wheel duration changes.
 
 ### P3 — Unwired settings / templates — **FIXED**

@@ -14,7 +14,7 @@ using PrivateRoulette.Services;
 namespace PrivateRoulette.UI;
 
 /// <summary>
-/// In-game wheel window. Uses the same 28s timing/radius profile as the web
+/// In-game wheel window. Uses the same 23s timing/radius profile as the web
 /// wheel: the rotor coasts, the ball rides the outer rim, drops onto the number
 /// track for a long crawl with tiny fret bumps, then settles exactly into the
 /// winning pocket.
@@ -23,7 +23,7 @@ public sealed class WheelWindow : Window
 {
     private const float Tau = MathF.PI * 2f;
     private const float Slot = Tau / 38f;
-    private const double SpinMs = 28000;
+    private const double SpinMs = 23000;
     private const double IdleRadPerSec = 0.12;
     private const double RimRadius = 0.925;
     private const double TrackRadius = 0.862;

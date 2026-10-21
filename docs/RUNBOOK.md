@@ -20,7 +20,7 @@
    posts `LastCall` + a compact current-bets line when the table locks.
 8. **Request spin** → roll `/random 1000` in chat (auto-captured) or type the
    dice (0–999). In manual mode, type the number (0–36, 37=00) and Force.
-9. The 28s wheel runs; at landing the web and in-game party chat reveal the
+9. The 23s wheel runs; at landing the web and in-game party chat reveal the
    result, winners and balances. `AutoAnnounceResults` posts the formatted
    `Results` template to table chat (buffered by the web until landing); the
    party line uses the `Win` template.
@@ -123,7 +123,7 @@ curl https://private-roulette-api.dexcss-roulette.workers.dev/health
 | Bets rejected | Per-spot/total/balance limits; message in the status or `dealer_error`. |
 | `too many bet changes — slow down` | Client is flooding; the server allows 30 bet mutations per 2s per socket. |
 | Player gets `dealer only` | Expected — dealer operations are role-gated. If the dealer sees it, the socket authenticated as player/spectator; reconnect. |
-| Balance updates instantly | Reveal guard broken: web `renderBalance`/`renderPlayers`, in-game party delay (28.9s). |
+| Balance updates instantly | Reveal guard broken: web `renderBalance`/`renderPlayers`, in-game party delay (23.9s). |
 | Wheel tiny / not resizing | Canvas sized while hidden; ResizeObserver + `refreshSize()` on table show. |
 | Corner/split hover glow off | Zones must be centered on the gap middle (cell edge + 4px for an 8px gap). |
 | Chip clipped under neighboring cells | A `filter` (or other stacking-context trigger) on the hovered cell; use box-shadow. |
